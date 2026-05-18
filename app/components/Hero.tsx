@@ -32,7 +32,7 @@ export default function Hero() {
         height={1100}
         priority
         aria-hidden
-        className="absolute top-20 right-4 sm:right-8 w-32 sm:w-44 lg:w-56 opacity-25 lg:opacity-20 pointer-events-none z-[1] mix-blend-screen"
+        className="absolute top-24 right-3 sm:right-8 w-20 sm:w-32 md:w-44 lg:w-56 opacity-20 pointer-events-none z-[1] mix-blend-screen"
       />
       <div className="container-x relative z-10">
         <div>
