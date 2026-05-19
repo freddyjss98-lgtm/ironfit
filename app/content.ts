@@ -1,7 +1,10 @@
 export const site = {
+  url: "https://ironfitclub.vercel.app",
   brand: "Iron Fit Club",
   city: "Loja, Ecuador",
+  country: "Ecuador",
   foundedDate: "30 · 08 · 2024",
+  foundedISO: "2024-08-30",
   whatsappNumber: "593959888060",
   whatsappDisplay: "+593 959 888 060",
   instagramHandle: "@ironfitloh",
