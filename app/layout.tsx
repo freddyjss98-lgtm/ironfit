@@ -5,6 +5,7 @@ import {
   Space_Grotesk,
   Space_Mono,
 } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const anton = Anton({
@@ -68,6 +69,7 @@ export default function RootLayout({
       <body className="bg-bg text-fg font-body">
         {children}
         <div className="grain" aria-hidden />
+        <Analytics />
       </body>
     </html>
   );
