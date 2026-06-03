@@ -11,6 +11,7 @@
 -- -----------------------------------------------------------------------------
 -- pgcrypto is enabled by default on Supabase, but declared here for clarity.
 create extension if not exists "pgcrypto";
+create extension if not exists "pg_trgm";
 
 -- -----------------------------------------------------------------------------
 -- Helper: generic updated_at trigger
@@ -90,8 +91,6 @@ create index members_full_name_trgm_idx on public.members
   using gin (full_name gin_trgm_ops);
 create unique index members_email_unique_idx on public.members(lower(email))
   where email is not null;
-
-create extension if not exists pg_trgm; -- for full_name_trgm_idx
 
 create trigger trg_members_updated_at
   before update on public.members

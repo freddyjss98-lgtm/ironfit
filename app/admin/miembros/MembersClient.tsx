@@ -1,0 +1,612 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { toggleMemberStatus } from "./actions";
+import { createMemberAccess, revokeMemberAccess } from "./accessActions";
+import MemberForm from "./MemberForm";
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+type Member = {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string | null;
+  birthday: string | null;
+  gender: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+  current_plan_name: string | null;
+  current_plan_color: string | null;
+  current_start_date: string | null;
+  current_end_date: string | null;
+  membership_status: string | null;
+  days_until_expiry: number | null;
+  user_id: string | null;
+};
+
+type Props = { members: Member[] };
+
+type Modal = { type: "create" } | { type: "edit"; member: Member } | null;
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+const MONTHS = [
+  "enero","febrero","marzo","abril","mayo","junio",
+  "julio","agosto","septiembre","octubre","noviembre","diciembre",
+];
+
+function formatBirthday(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const parts = dateStr.split("-");
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
+  return `${day} de ${MONTHS[month - 1]}`;
+}
+
+function isBirthdayThisMonth(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  const currentMonth = new Date().getMonth() + 1;
+  return parseInt(dateStr.split("-")[1], 10) === currentMonth;
+}
+
+function birthdayDayOfMonth(dateStr: string | null): number {
+  if (!dateStr) return 99;
+  return parseInt(dateStr.split("-")[2], 10);
+}
+
+function formatInscripcion(dateStr: string): string {
+  return dateStr.split("T")[0].replace(/-/g, "/");
+}
+
+const MONTHS_SHORT = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+function formatDateShort(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const [, m, d] = dateStr.split("-");
+  return `${parseInt(d)} ${MONTHS_SHORT[parseInt(m) - 1]}`;
+}
+
+function MembershipBadge({ member }: { member: Member }) {
+  const s = member.membership_status;
+
+  if (!s || s === "no_membership") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-white/8 text-fg/35 border border-line/30">
+        Sin membresía
+      </span>
+    );
+  }
+
+  if (s === "expired") {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/25 w-fit">
+          ✕ Vencida
+        </span>
+        {member.current_plan_name && (
+          <span className="text-xs text-fg/35 pl-0.5">{member.current_plan_name}</span>
+        )}
+        {member.current_end_date && (
+          <span className="text-xs text-red-400/60 pl-0.5">venció {formatDateShort(member.current_end_date)}</span>
+        )}
+      </div>
+    );
+  }
+
+  // active
+  const planColor = member.current_plan_color ?? "#e84b1f";
+  const daysLeft = member.days_until_expiry ?? 0;
+  const urgent = daysLeft <= 7;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span
+        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border w-fit font-medium"
+        style={{
+          backgroundColor: planColor + "22",
+          borderColor: planColor + "55",
+          color: planColor,
+        }}
+      >
+        ✓ {member.current_plan_name ?? "Activa"}
+      </span>
+      <span className="text-xs text-fg/40 pl-0.5">
+        {formatDateShort(member.current_start_date)} → {formatDateShort(member.current_end_date)}
+      </span>
+      <span className={`text-xs pl-0.5 ${urgent ? "text-amber-400" : "text-fg/30"}`}>
+        {urgent ? `⚠ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
+      </span>
+    </div>
+  );
+}
+
+function normalizePhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.startsWith("593")
+    ? digits
+    : digits.startsWith("0")
+    ? "593" + digits.slice(1)
+    : "593" + digits;
+}
+
+function waLink(phone: string) {
+  return `https://wa.me/${normalizePhone(phone)}`;
+}
+
+// Link público al registro del portal (cliente nuevo crea su propia cuenta)
+function registerUrl() {
+  const base =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://ironfitclub.vercel.app";
+  return `${base}/portal/register`;
+}
+
+function defaultInviteMessage() {
+  return (
+    "¡Hola! 💪 Te invitamos a unirte a *Iron Fit Club*.\n\n" +
+    "Regístrate en nuestra plataforma para activar tu membresía, reservar clases " +
+    "y seguir tu progreso desde el celular:\n" +
+    registerUrl()
+  );
+}
+
+// ── Modal: invitar a registrarse (clientes nuevos) ──────────────────────────────
+
+function InviteModal({ onClose }: { onClose: () => void }) {
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState(defaultInviteMessage());
+
+  function buildWaUrl() {
+    const text = encodeURIComponent(message);
+    const normalized = normalizePhone(phone);
+    return normalized
+      ? `https://wa.me/${normalized}?text=${text}`
+      : `https://wa.me/?text=${text}`;
+  }
+
+  function handleSend() {
+    window.open(buildWaUrl(), "_blank", "noopener,noreferrer");
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(message);
+      toast.success("Mensaje copiado");
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(registerUrl());
+      toast.success("Link copiado");
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-display text-lg uppercase tracking-tight">
+            Invitar a registrarse
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-fg/40 hover:text-fg text-xl leading-none"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-fg/40 text-xs mb-5">
+          Para clientes nuevos: les envías el enlace para que creen su cuenta y
+          activen su membresía.
+        </p>
+
+        <div className="space-y-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-fg/50 text-xs uppercase tracking-wider">
+              WhatsApp del cliente (opcional)
+            </label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0999 123 456"
+              inputMode="tel"
+              className="w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors placeholder:text-fg/20"
+            />
+            <p className="text-fg/30 text-xs">
+              Si lo dejas vacío, WhatsApp te dejará elegir el contacto.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-fg/50 text-xs uppercase tracking-wider">
+              Mensaje
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={5}
+              className="w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 justify-end mt-5 pt-4 border-t border-line">
+          <button
+            onClick={handleCopyLink}
+            className="px-3 py-2 text-xs text-fg/60 hover:text-fg border border-line rounded-lg transition-colors"
+          >
+            Copiar link
+          </button>
+          <button
+            onClick={handleCopy}
+            className="px-3 py-2 text-xs text-fg/60 hover:text-fg border border-line rounded-lg transition-colors"
+          >
+            Copiar mensaje
+          </button>
+          <button
+            onClick={handleSend}
+            className="px-4 py-2 text-xs font-bold bg-[#25d366] hover:bg-[#1fb855] text-white rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <WhatsAppIcon /> Enviar por WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function downloadCSV(rows: Member[], filename: string) {
+  const headers = ["Nombre","Teléfono","Email","Cumpleaños","Género","Fecha Inscripción","Estado","Plan","Membresía Desde","Membresía Hasta","Días Restantes"];
+  const lines = rows.map((r) =>
+    [
+      `"${r.full_name}"`,
+      r.phone,
+      r.email ?? "",
+      r.birthday ?? "",
+      r.gender ?? "",
+      formatInscripcion(r.created_at),
+      r.status,
+      r.current_plan_name ?? "",
+      r.current_start_date ?? "",
+      r.current_end_date ?? "",
+      r.days_until_expiry ?? "",
+    ].join(",")
+  );
+  const csv = [headers.join(","), ...lines].join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+export default function MembersClient({ members }: Props) {
+  const [modal, setModal] = useState<Modal>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(12);
+
+  const filtered = members.filter((m) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      m.full_name.toLowerCase().includes(q) ||
+      m.phone.includes(q) ||
+      (m.email ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const total = filtered.length;
+  const pageCount = Math.ceil(total / rowsPerPage) || 1;
+  const currentPage = Math.min(page, pageCount - 1);
+  const paged = filtered.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+
+  // Stats
+  const activos = members.filter((m) => m.status === "active");
+  const totalActivos = activos.length;
+  const masculinos = activos.filter((m) => m.gender === "M").length;
+  const femeninos = activos.filter((m) => m.gender === "F").length;
+
+  // Birthday this month
+  const currentMonthName = MONTHS[new Date().getMonth()];
+  const birthdayThisMonth = members
+    .filter((m) => isBirthdayThisMonth(m.birthday))
+    .sort((a, b) => birthdayDayOfMonth(a.birthday) - birthdayDayOfMonth(b.birthday));
+
+  function handleSearch(v: string) {
+    setSearch(v);
+    setPage(0);
+  }
+
+  return (
+    <>
+      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+        <div className="flex-1 w-full">
+          <input
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Buscar usuario por nombre o apellido..."
+            className="w-full bg-white/5 border border-line text-fg text-sm rounded-lg px-3 py-2 outline-none focus:border-accent transition-colors placeholder:text-fg/30"
+          />
+        </div>
+        <div className="flex gap-2 shrink-0 flex-wrap">
+          {search && (
+            <button
+              onClick={() => handleSearch("")}
+              className="px-3 py-2 border border-line text-fg/60 hover:text-fg text-xs rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              ✕ Limpiar
+            </button>
+          )}
+          <button
+            onClick={() => setModal({ type: "create" })}
+            className="px-3 py-2 bg-accent hover:bg-accent/80 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+          >
+            + Nuevo
+          </button>
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="px-3 py-2 bg-[#25d366] hover:bg-[#1fb855] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <WhatsAppIcon /> Invitar
+          </button>
+          <button
+            onClick={() => downloadCSV(filtered, "usuarios.csv")}
+            className="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            ↓ Excel
+          </button>
+          <span className="px-3 py-2 bg-accent text-white text-xs font-bold rounded-lg">
+            Total: {total}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Table ────────────────────────────────────────────────────────── */}
+      <div className="bg-white/5 border border-line rounded-xl overflow-hidden">
+        {filtered.length === 0 ? (
+          <p className="text-fg/40 text-sm text-center py-12">
+            {search ? "Sin resultados para esa búsqueda" : "No hay usuarios registrados"}
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-fg/40 text-xs uppercase tracking-wider bg-white/[0.02]">
+                    <th className="text-left px-4 py-3">Nombre</th>
+                    <th className="text-left px-4 py-3 hidden md:table-cell">Cumpleaños</th>
+                    <th className="text-left px-4 py-3">Teléfono</th>
+                    <th className="text-left px-4 py-3 hidden lg:table-cell">Email</th>
+                    <th className="text-left px-4 py-3 hidden xl:table-cell">Inscripción</th>
+                    <th className="text-left px-4 py-3">Membresía</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.map((m) => {
+                    const bdThisMonth = isBirthdayThisMonth(m.birthday);
+                    return (
+                      <tr
+                        key={m.id}
+                        className="border-b border-line/50 last:border-0 hover:bg-white/[0.04] transition-colors"
+                      >
+                        {/* Nombre */}
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/admin/miembros/${m.id}`}
+                            className="flex items-center gap-1.5 group"
+                          >
+                            <span className="text-accent group-hover:underline font-medium">
+                              {m.full_name}
+                            </span>
+                            {bdThisMonth && (
+                              <span title="Cumpleaños este mes" className="text-base leading-none">
+                                🎂
+                              </span>
+                            )}
+                          </Link>
+                        </td>
+
+                        {/* Cumpleaños */}
+                        <td className="px-4 py-3 text-fg/60 text-sm hidden md:table-cell">
+                          {formatBirthday(m.birthday)}
+                        </td>
+
+                        {/* Teléfono */}
+                        <td className="px-4 py-3">
+                          <a
+                            href={`tel:${m.phone}`}
+                            className="text-emerald-400 hover:text-emerald-300 transition-colors text-sm"
+                          >
+                            {m.phone}
+                          </a>
+                        </td>
+
+                        {/* Email */}
+                        <td className="px-4 py-3 text-fg/60 text-sm hidden lg:table-cell">
+                          {m.email ?? "—"}
+                        </td>
+
+                        {/* Fecha Inscripción */}
+                        <td className="px-4 py-3 text-fg/50 text-sm hidden xl:table-cell">
+                          {formatInscripcion(m.created_at)}
+                        </td>
+
+                        {/* Membresía */}
+                        <td className="px-4 py-3">
+                          <MembershipBadge member={m} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t border-line text-xs text-fg/50">
+              <div className="flex items-center gap-2">
+                <span>Rows per page:</span>
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }}
+                  className="bg-white/10 border border-line rounded px-2 py-0.5 text-fg text-xs outline-none focus:border-accent"
+                >
+                  <option value={10}>10</option>
+                  <option value={12}>12</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <span>
+                  {total === 0
+                    ? "0"
+                    : `${currentPage * rowsPerPage + 1}–${Math.min(
+                        (currentPage + 1) * rowsPerPage,
+                        total
+                      )}`}{" "}
+                  of {total}
+                </span>
+                <button
+                  disabled={currentPage === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-line disabled:opacity-30 hover:border-fg/40 hover:text-fg transition-colors"
+                >
+                  ‹
+                </button>
+                <button
+                  disabled={currentPage >= pageCount - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-line disabled:opacity-30 hover:border-fg/40 hover:text-fg transition-colors"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Stats section ────────────────────────────────────────────────── */}
+      <div className="bg-white/5 border border-line rounded-xl px-5 py-4 flex flex-wrap gap-6 items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center text-accent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-fg/50 text-xs">Total de Usuarios Activos:</p>
+            <p className="font-display text-2xl text-fg leading-tight">{totalActivos}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 ml-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">♂</span>
+            <span className="text-sky-400 font-bold text-lg">{masculinos}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">♀</span>
+            <span className="text-pink-400 font-bold text-lg">{femeninos}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Birthday panel ───────────────────────────────────────────────── */}
+      {birthdayThisMonth.length > 0 && (
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl px-5 py-4 space-y-3">
+          <div className="flex items-center gap-2 text-amber-400">
+            <span className="text-lg">🎂</span>
+            <p className="text-sm font-semibold">
+              Usuarios que cumplen años este mes ({currentMonthName}):{" "}
+              <span className="font-bold">{birthdayThisMonth.length}</span>
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {birthdayThisMonth.map((m) => (
+              <div
+                key={m.id}
+                className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-center gap-3 min-w-[160px]"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-fg truncate flex items-center gap-1">
+                    {m.full_name}
+                    <span className="text-base leading-none">🎂</span>
+                  </p>
+                  <p className="text-xs text-fg/50 mt-0.5">{formatBirthday(m.birthday)}</p>
+                </div>
+                <a
+                  href={waLink(m.phone)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`WhatsApp: ${m.phone}`}
+                  className="shrink-0 w-7 h-7 rounded-full bg-[#25d366] flex items-center justify-center text-white hover:scale-110 transition-transform"
+                >
+                  <WhatsAppIcon />
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal (crear / editar) ────────────────────────────────────────── */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111] border border-line rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-display text-lg uppercase tracking-tight">
+                {modal.type === "create" ? "Nuevo usuario" : "Editar usuario"}
+              </h2>
+              <button
+                onClick={() => setModal(null)}
+                className="text-fg/40 hover:text-fg text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <MemberForm
+              member={modal.type === "edit" ? modal.member : undefined}
+              onClose={() => setModal(null)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal (invitar a registrarse) ─────────────────────────────────── */}
+      {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
+    </>
+  );
+}

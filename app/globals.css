@@ -21,6 +21,8 @@
 
   --spacing-pad-x: clamp(20px, 4vw, 64px);
   --container-maxw: 1440px;
+
+  --grid-template-columns-15: repeat(15, minmax(0, 1fr));
 }
 
 :root {
@@ -250,4 +252,60 @@ body {
   .cursor-ring {
     display: none;
   }
+}
+
+/* ── Select / Option dark theme fix ────────────────────────────────────────── */
+/* Native <select> dropdowns inherit the OS theme — force dark background      */
+select {
+  background-color: #1a1a1a;
+  color-scheme: dark;
+}
+
+select option {
+  background-color: #1a1a1a;
+  color: #f4f1ea;
+}
+
+select option:hover,
+select option:checked {
+  background-color: #e84b1f;
+  color: #fff;
+}
+
+/* ── Skeleton loading shimmer ──────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+
+/* ── Subtle entrance for cards/sections ────────────────────────────────────── */
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-rise {
+  animation: fade-rise 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
 }

@@ -1,0 +1,76 @@
+// =============================================================================
+// Recordatorio: vencimiento de membresía
+// =============================================================================
+// Lógica pura (sin I/O) para decidir el mensaje del recordatorio de
+// vencimiento. La consulta de candidatos y el envío se orquestan en el cron
+// (app/api/cron/reminders/route.ts).
+// =============================================================================
+
+import type { TemplateMessage } from "@/lib/whatsapp/send";
+
+export const REMINDER_TYPE_EXPIRY = "membership_expiry";
+
+/** Ventana de aviso: se notifica cuando faltan 0..N días para vencer. */
+export const EXPIRY_REMINDER_DAYS = 3;
+
+/** Nombre de la plantilla de Meta para el aviso de vencimiento. */
+export function expiryTemplateName(): string {
+  return process.env.WHATSAPP_TEMPLATE_EXPIRY ?? "membership_expiry";
+}
+
+export type ExpiryCandidate = {
+  id: string;
+  full_name: string;
+  phone: string;
+  current_plan_name: string | null;
+  current_end_date: string; // 'YYYY-MM-DD'
+  days_until_expiry: number;
+};
+
+const MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** Formatea 'YYYY-MM-DD' como '29 de mayo de 2026'. */
+export function formatSpanishDate(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !d) return ymd;
+  return `${d} de ${MONTHS[m - 1]} de ${y}`;
+}
+
+function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] ?? fullName;
+}
+
+/** Texto legible del recordatorio (para registro y para modo dry-run). */
+export function buildExpiryMessage(c: ExpiryCandidate): string {
+  const plan = c.current_plan_name ? ` *${c.current_plan_name}*` : "";
+  const fecha = formatSpanishDate(c.current_end_date);
+  return (
+    `Hola ${firstName(c.full_name)}! 👋 Tu membresía${plan} en Iron Fit Club ` +
+    `vence el *${fecha}*. Te invitamos a renovar para continuar entrenando ` +
+    `sin interrupción. 💪🔥`
+  );
+}
+
+/**
+ * Parámetros para la plantilla de Meta. El cuerpo de la plantilla aprobada
+ * debe usar estas variables en este orden:
+ *   {{1}} = nombre, {{2}} = plan, {{3}} = fecha de vencimiento.
+ *
+ * Ejemplo de cuerpo de plantilla a registrar en Meta:
+ *   "Hola {{1}}! Tu membresía {{2}} en Iron Fit Club vence el {{3}}.
+ *    Te invitamos a renovar para seguir entrenando sin interrupción."
+ */
+export function buildExpiryTemplate(c: ExpiryCandidate): TemplateMessage {
+  return {
+    templateName: expiryTemplateName(),
+    languageCode: process.env.WHATSAPP_TEMPLATE_EXPIRY_LANG ?? "es",
+    bodyParams: [
+      firstName(c.full_name),
+      c.current_plan_name ?? "actual",
+      formatSpanishDate(c.current_end_date),
+    ],
+  };
+}

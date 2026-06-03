@@ -1,10 +1,23 @@
-import Placeholder from "../_components/Placeholder";
+import { createClient } from "@/lib/supabase/server";
+import PlanesClient from "./PlanesClient";
 
-export default function PlanesPage() {
+export default async function PlanesPage() {
+  const supabase = await createClient();
+
+  const { data: plans } = await supabase
+    .from("membership_plans")
+    .select("id, name, description, price, duration_days, color, active")
+    .order("sort_order")
+    .order("name");
+
   return (
-    <Placeholder
-      title="Planes"
-      description="Tipos de membresía con nombre, precio y duración. CRUD sobre tabla membership_plans. Drag to reorder (sort_order)."
-    />
+    <div className="space-y-5">
+      <div>
+        <h2 className="font-display text-2xl uppercase tracking-tight">Planes</h2>
+        <p className="text-fg/40 text-sm mt-0.5">{plans?.length ?? 0} planes</p>
+      </div>
+
+      <PlanesClient plans={plans ?? []} />
+    </div>
   );
 }

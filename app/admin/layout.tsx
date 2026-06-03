@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Toaster } from "sonner";
 import AdminShell from "./_components/AdminShell";
 
 export const metadata: Metadata = {
@@ -12,5 +13,20 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AdminShell>{children}</AdminShell>;
+  return (
+    <>
+      <AdminShell>{children}</AdminShell>
+      <Toaster
+        theme="dark"
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: "#111",
+            border: "1px solid rgba(255,255,255,0.1)",
+            color: "#fff",
+          },
+        }}
+      />
+    </>
+  );
 }

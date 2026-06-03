@@ -6,12 +6,17 @@ import Image from "next/image";
 
 const links = [
   { href: "/admin", label: "Dashboard", icon: "▣" },
+  { href: "/admin/asistencia", label: "Asistencia", icon: "→" },
   { href: "/admin/miembros", label: "Miembros", icon: "◉" },
   { href: "/admin/membresias", label: "Membresías", icon: "◈" },
-  { href: "/admin/planes", label: "Planes", icon: "◇" },
+  { href: "/admin/recordatorios", label: "Recordatorios", icon: "◐" },
   { href: "/admin/ventas", label: "Ventas", icon: "$" },
+  { href: "/admin/productos", label: "Productos", icon: "▦" },
   { href: "/admin/clases", label: "Clases", icon: "◌" },
-  { href: "/admin/tienda", label: "Tienda", icon: "▤" },
+  { href: "/admin/coaches", label: "Coaches", icon: "◎" },
+  { href: "/admin/reservas", label: "Reservas", icon: "◫" },
+  { href: "/admin/eventos", label: "Eventos", icon: "◆" },
+  { href: "/admin/planificaciones", label: "Planificaciones", icon: "◧" },
 ];
 
 type Props = {

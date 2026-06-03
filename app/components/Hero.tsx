@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Reveal from "./Reveal";
 import { BgAnimateButton } from "./cult/bg-animate-button";
+import HeroAuthCTA from "./HeroAuthCTA";
 import { hero } from "../content";
 
 export default function Hero() {
@@ -96,6 +97,12 @@ export default function Hero() {
               >
                 {hero.ctas.secondary.label}
               </a>
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.35}>
+            <div className="mt-4">
+              <HeroAuthCTA />
             </div>
           </Reveal>
         </div>

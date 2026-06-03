@@ -1,5 +1,6 @@
 import CustomCursor from "./components/CustomCursor";
 import Nav from "./components/Nav";
+import NavAuthButton from "./components/NavAuthButton";
 import Hero from "./components/Hero";
 import Marquee from "./components/Marquee";
 import Stats from "./components/Stats";
@@ -15,7 +16,7 @@ export default function Page() {
   return (
     <>
       <CustomCursor />
-      <Nav />
+      <Nav authButton={<NavAuthButton />} />
       <main>
         <Hero />
         <Marquee />

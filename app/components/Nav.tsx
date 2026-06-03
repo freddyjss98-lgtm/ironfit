@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { nav, site } from "../content";
 
-export default function Nav() {
+export default function Nav({ authButton }: { authButton?: ReactNode }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export default function Nav() {
           </nav>
 
           <div className="flex items-center gap-2">
+            {authButton}
             <a
               href={nav.cta.href}
               className="t-mono-label dot-pulse border border-line-2 px-3 py-1.5 sm:px-4 sm:py-2 hover:border-accent hover:text-accent transition-colors"
@@ -107,6 +109,13 @@ export default function Nav() {
               </a>
             ))}
           </nav>
+
+          {authButton && (
+            <div className="mt-8 pt-6 border-t border-line">
+              <p className="t-mono-label text-fg-mute mb-3">Tu acceso</p>
+              <div onClick={() => setOpen(false)}>{authButton}</div>
+            </div>
+          )}
 
           <div className="mt-auto pt-10 border-t border-line">
             <p className="t-mono-label text-fg-mute mb-3">Contacto directo</p>
