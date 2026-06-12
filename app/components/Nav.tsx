@@ -32,7 +32,7 @@ export default function Nav({ authButton }: { authButton?: ReactNode }) {
             <Image
               src="/logo/logo-horizontal.png"
               alt={site.brand}
-              width={400}
+              width={636}
               height={100}
               priority
               className="h-7 sm:h-10 w-auto"

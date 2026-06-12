@@ -121,10 +121,9 @@ export default async function PortalPage() {
           {(membership?.effective_status !== "active" || (membership?.days_until_expiry ?? 99) <= 14) && (
             <QuickAction href="/portal/renovar" emoji="♻️" label="Renovar" highlight />
           )}
-          <QuickAction href="/portal/clases" emoji="📅" label="Reservar clase" />
-          <QuickAction href="/portal/progreso" emoji="📈" label="Mi progreso" />
-          <QuickAction href="/portal/asistencia" emoji="✅" label="Asistencia" />
-          <QuickAction href="/portal/pagos" emoji="🧾" label="Pagos" />
+          <QuickAction href="/portal/clases" emoji="🏋️" label="Entrenamiento" />
+          <QuickAction href="/portal/progreso" emoji="📈" label="Progreso y asistencia" />
+          <QuickAction href="/portal/renovar" emoji="🧾" label="Pagos y renovación" />
           <QuickAction href="/portal/tienda" emoji="🛒" label="Tienda" />
         </div>
       </div>
@@ -391,13 +390,19 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 py-3.5 px-4 rounded-xl border transition-colors text-sm font-medium ${
+      className={`group flex items-center gap-3 py-3.5 px-4 rounded-xl border text-sm font-medium transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
         highlight
-          ? "bg-accent hover:bg-accent/80 text-white border-accent"
+          ? "bg-accent hover:bg-accent/80 text-white border-accent shadow-lg shadow-accent/20"
           : "bg-white/5 hover:bg-white/10 border-line text-fg"
       }`}
     >
-      <span className="text-lg">{emoji}</span>
+      <span
+        className={`flex items-center justify-center w-9 h-9 rounded-lg text-lg shrink-0 transition-colors ${
+          highlight ? "bg-white/15" : "bg-white/5 group-hover:bg-white/10"
+        }`}
+      >
+        {emoji}
+      </span>
       {label}
     </Link>
   );

@@ -7,6 +7,7 @@ export type PortalMember = {
   birthday: string | null;
   height_cm: number | null;
   gender: string | null;
+  target_weight: number | null;
 };
 
 type Result =
@@ -29,7 +30,7 @@ export async function getPortalMember(
   // 1. Try to find a member linked directly to this user
   const { data: ownMember } = await supabase
     .from("members")
-    .select("id, full_name, phone, birthday, height_cm, gender")
+    .select("id, full_name, phone, birthday, height_cm, gender, target_weight")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -51,7 +52,7 @@ export async function getPortalMember(
   // 3. Admin preview — grab first active member
   const { data: previewMember } = await supabase
     .from("members")
-    .select("id, full_name, phone, birthday, height_cm, gender")
+    .select("id, full_name, phone, birthday, height_cm, gender, target_weight")
     .eq("status", "active")
     .limit(1)
     .maybeSingle();
@@ -63,7 +64,7 @@ export async function getPortalMember(
   // 4. No active members — grab any member
   const { data: anyMember } = await supabase
     .from("members")
-    .select("id, full_name, phone, birthday, height_cm, gender")
+    .select("id, full_name, phone, birthday, height_cm, gender, target_weight")
     .limit(1)
     .maybeSingle();
 

@@ -31,34 +31,42 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // ── ADMIN ────────────────────────────────────────────────────────────────
-  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
-    }
+  // Login único: el viejo /admin/login ya no existe → al login del portal
+  if (pathname === "/admin/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/portal/login";
+    return NextResponse.redirect(url);
   }
 
-  if (pathname === "/admin/login" && user) {
-    // Check if this user is an admin (has a profile row)
+  // ¿El usuario tiene permiso de admin? (solo el staff tiene fila en profiles)
+  async function isAdmin(): Promise<boolean> {
+    if (!user) return false;
     const { data: profile } = await supabase
       .from("profiles")
       .select("id")
       .eq("id", user.id)
       .maybeSingle();
-
-    if (profile) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin";
-      return NextResponse.redirect(url);
-    }
-    // If no profile (member trying /admin/login), let them through to see the form
-    // but they'll fail auth since we check role on the server
+    return Boolean(profile);
   }
 
-  // ── PORTAL ───────────────────────────────────────────────────────────────
+  // ── ADMIN: requiere sesión + rol admin ────────────────────────────────────
+  if (pathname.startsWith("/admin")) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/portal/login";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+    if (!(await isAdmin())) {
+      // Socio autenticado → su portal
+      const url = request.nextUrl.clone();
+      url.pathname = "/portal";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // ── PORTAL: requiere sesión ────────────────────────────────────────────────
   if (
     pathname.startsWith("/portal") &&
     pathname !== "/portal/login" &&
@@ -72,9 +80,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Ya logueado en el login → enrutar por rol
   if (pathname === "/portal/login" && user) {
     const url = request.nextUrl.clone();
-    url.pathname = "/portal";
+    url.pathname = (await isAdmin()) ? "/admin" : "/portal";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

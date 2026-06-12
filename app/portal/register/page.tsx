@@ -17,7 +17,7 @@ export default async function RegisterPage({ searchParams }: Props) {
             src="/logo/logo-horizontal.png"
             alt="Iron Fit Club"
             width={140}
-            height={42}
+            height={22}
             className="mx-auto mb-6"
           />
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-8">
@@ -47,7 +47,7 @@ export default async function RegisterPage({ searchParams }: Props) {
             src="/logo/logo-horizontal.png"
             alt="Iron Fit Club"
             width={140}
-            height={42}
+            height={22}
             className="mx-auto mb-3"
           />
           <p className="text-white/40 text-sm">Crea tu cuenta de atleta</p>

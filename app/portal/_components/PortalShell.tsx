@@ -7,12 +7,11 @@ import { portalSignOut } from "../login/actions";
 
 const NAV = [
   { href: "/portal", label: "Mi membresía" },
-  { href: "/portal/asistencia", label: "Asistencia" },
   { href: "/portal/progreso", label: "Progreso" },
-  { href: "/portal/pagos", label: "Pagos" },
-  { href: "/portal/clases", label: "Clases" },
+  { href: "/portal/clases", label: "Entrenamiento" },
   { href: "/portal/tienda", label: "Tienda" },
   { href: "/portal/renovar", label: "Renovar" },
+  { href: "/portal/perfil", label: "Perfil" },
 ];
 
 interface PortalShellProps {
@@ -34,7 +33,7 @@ export default function PortalShell({ children, isAdmin = false }: PortalShellPr
             <Image
               src="/logo/logo-horizontal.png"
               alt="Iron Fit"
-              width={100}
+              width={191}
               height={30}
               className="h-7 w-auto"
             />

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { createMember, updateMember } from "./actions";
+import Image from "next/image";
+import { createMember, updateMember, uploadMemberPhoto } from "./actions";
 
 type Member = {
   id: string;
@@ -9,6 +10,7 @@ type Member = {
   phone: string;
   email: string | null;
   birthday: string | null;
+  photo_url: string | null;
   gender: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
@@ -29,6 +31,15 @@ export default function MemberForm({ member, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(member?.photo_url ?? null);
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,6 +48,12 @@ export default function MemberForm({ member, onClose }: Props) {
 
     startTransition(async () => {
       try {
+        let photoUrl = member?.photo_url ?? "";
+        if (photoFile) {
+          photoUrl = await uploadMemberPhoto(photoFile, member?.id);
+        }
+        fd.set("photo_url", photoUrl);
+
         if (member) {
           await updateMember(member.id, fd);
         } else {
@@ -57,6 +74,36 @@ export default function MemberForm({ member, onClose }: Props) {
           {error}
         </div>
       )}
+
+      {/* Foto del atleta */}
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full overflow-hidden bg-white/5 border border-line flex items-center justify-center shrink-0">
+          {photoPreview ? (
+            <Image
+              src={photoPreview}
+              alt="Foto"
+              width={64}
+              height={64}
+              unoptimized
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-fg/30 text-xl">📷</span>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>Foto del atleta</label>
+          <label className="cursor-pointer inline-flex items-center gap-2 text-xs text-fg/70 hover:text-fg border border-line hover:border-accent/40 rounded-lg px-3 py-2 transition-colors w-fit">
+            {photoPreview ? "Cambiar foto" : "Subir foto"}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoChange}
+              className="hidden"
+            />
+          </label>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5 sm:col-span-2">

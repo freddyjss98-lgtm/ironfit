@@ -17,21 +17,21 @@ export async function portalSignIn(formData: FormData) {
     );
   }
 
-  // ── Si el usuario es admin, redirigir al panel admin ──────────────────────
+  // ── Si el usuario es staff (tiene fila en profiles) → panel admin ─────────
   if (signInData.user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("id")
       .eq("id", signInData.user.id)
       .maybeSingle();
 
-    if (profile?.role === "admin") {
+    if (profile) {
       redirect("/admin");
     }
   }
 
-  // ── Miembro normal → portal ───────────────────────────────────────────────
-  redirect(next || "/portal");
+  // ── Socio → portal (nunca lo enviamos a /admin aunque venga en `next`) ────
+  redirect(next && !next.startsWith("/admin") ? next : "/portal");
 }
 
 export async function portalSignOut() {

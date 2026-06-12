@@ -53,6 +53,27 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* ─── Notificación: membresías por vencer ─────────────────────────── */}
+      {stats.expiring7Days > 0 && (
+        <Link
+          href="/admin/membresias"
+          className="flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-5 py-4 hover:bg-amber-500/15 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⏰</span>
+            <div>
+              <p className="text-amber-300 font-semibold text-sm">
+                {stats.expiring7Days} membresía{stats.expiring7Days !== 1 ? "s" : ""} por vencer en los próximos 7 días
+              </p>
+              <p className="text-fg/50 text-xs mt-0.5">
+                Revisa la lista y contacta a los socios para renovar.
+              </p>
+            </div>
+          </div>
+          <span className="text-amber-300 text-sm shrink-0 font-medium">Ver →</span>
+        </Link>
+      )}
+
       {/* ─── Ventas ──────────────────────────────────────────────────────── */}
       <Section title="Ventas">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

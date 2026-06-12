@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
-import { toggleMemberStatus } from "./actions";
-import { createMemberAccess, revokeMemberAccess } from "./accessActions";
+import { archiveMember, restoreMember } from "./actions";
+import { createMembership } from "../membresias/actions";
 import MemberForm from "./MemberForm";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ type Member = {
   phone: string;
   email: string | null;
   birthday: string | null;
+  photo_url: string | null;
   gender: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
@@ -30,7 +32,16 @@ type Member = {
   user_id: string | null;
 };
 
-type Props = { members: Member[] };
+type Plan = { id: string; name: string; price: number; duration_days: number; color: string };
+type ArchivedMember = {
+  id: string;
+  full_name: string;
+  phone: string;
+  photo_url: string | null;
+  deleted_at: string;
+};
+
+type Props = { members: Member[]; plans: Plan[]; archived: ArchivedMember[] };
 
 type Modal = { type: "create" } | { type: "edit"; member: Member } | null;
 
@@ -303,11 +314,311 @@ function WhatsAppIcon() {
   );
 }
 
+// ── Avatar ───────────────────────────────────────────────────────────────────
+
+function Avatar({ name, url, size = 32 }: { name: string; url: string | null; size?: number }) {
+  if (url) {
+    return (
+      <Image
+        src={url}
+        alt={name}
+        width={size}
+        height={size}
+        unoptimized
+        className="rounded-full object-cover shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? "")
+    .join("");
+  return (
+    <span
+      className="rounded-full bg-accent/20 text-accent font-bold flex items-center justify-center shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+    >
+      {initials || "?"}
+    </span>
+  );
+}
+
+// ── Membresía inline (junto al nombre) ─────────────────────────────────────────
+
+function PlanInline({ member, onAssign }: { member: Member; onAssign: () => void }) {
+  const active = member.membership_status === "active" && member.current_plan_name;
+  if (active) {
+    const color = member.current_plan_color ?? "#e84b1f";
+    return (
+      <button
+        onClick={onAssign}
+        title="Cambiar membresía"
+        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium hover:opacity-80 transition-opacity w-fit"
+        style={{ backgroundColor: color + "22", borderColor: color + "55", color }}
+      >
+        {member.current_plan_name}
+        <span className="opacity-60">· cambiar</span>
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={onAssign}
+      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-accent/40 text-accent hover:bg-accent/10 transition-colors w-fit"
+    >
+      + Asignar plan
+    </button>
+  );
+}
+
+// ── Modal: asignar / cambiar membresía ─────────────────────────────────────────
+
+function AssignPlanModal({
+  member,
+  plans,
+  onClose,
+}: {
+  member: Member;
+  plans: Plan[];
+  onClose: () => void;
+}) {
+  const [planId, setPlanId] = useState(plans[0]?.id ?? "");
+  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [amount, setAmount] = useState(String(plans[0]?.price ?? ""));
+  const [method, setMethod] = useState("cash");
+  const [pending, startTransition] = useTransition();
+
+  const fieldCls =
+    "w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors";
+  const labelMini = "text-fg/50 text-xs uppercase tracking-wider";
+  const hasPlan = member.membership_status === "active" && member.current_plan_name;
+
+  function handlePlan(id: string) {
+    setPlanId(id);
+    const p = plans.find((pl) => pl.id === id);
+    if (p) setAmount(String(p.price));
+  }
+
+  function handleSave() {
+    if (!planId) {
+      toast.error("Selecciona un plan");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("member_id", member.id);
+        fd.set("plan_id", planId);
+        fd.set("start_date", startDate);
+        fd.set("paid_amount", amount || "0");
+        fd.set("payment_method", method);
+        await createMembership(fd);
+        toast.success(hasPlan ? "Membresía actualizada" : "Membresía asignada");
+        onClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al asignar");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-display text-lg uppercase tracking-tight">
+            {hasPlan ? "Cambiar membresía" : "Asignar membresía"}
+          </h2>
+          <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">
+            ✕
+          </button>
+        </div>
+        <p className="text-fg/40 text-xs mb-5">{member.full_name}</p>
+
+        {plans.length === 0 ? (
+          <p className="text-fg/50 text-sm py-4">
+            No hay planes activos. Crea uno en la sección Planes.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelMini}>Plan</label>
+              <select value={planId} onChange={(e) => handlePlan(e.target.value)} className={fieldCls}>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — ${p.price} ({p.duration_days}d)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className={labelMini}>Inicio</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className={fieldCls}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelMini}>Monto pagado</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className={fieldCls}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelMini}>Método de pago</label>
+              <select value={method} onChange={(e) => setMethod(e.target.value)} className={fieldCls}>
+                <option value="cash">Efectivo</option>
+                <option value="transfer">Transferencia</option>
+                <option value="card">Tarjeta</option>
+                <option value="other">Otro</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-line">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={pending || plans.length === 0}
+            className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {pending ? "Guardando..." : hasPlan ? "Actualizar" : "Asignar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal: confirmar archivado ─────────────────────────────────────────────────
+
+function ConfirmArchiveModal({ member, onClose }: { member: Member; onClose: () => void }) {
+  const [pending, startTransition] = useTransition();
+
+  function handleArchive() {
+    startTransition(async () => {
+      try {
+        await archiveMember(member.id);
+        toast.success("Usuario archivado");
+        onClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al archivar");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-sm p-6">
+        <h2 className="font-display text-lg uppercase tracking-tight mb-2">¿Archivar usuario?</h2>
+        <p className="text-fg/60 text-sm mb-1">
+          Vas a archivar a <span className="text-fg font-semibold">{member.full_name}</span>.
+        </p>
+        <p className="text-fg/40 text-xs mb-6">
+          Se ocultará de las listas pero se conserva todo su historial (ventas, asistencias,
+          membresías). Podrás restaurarlo desde “Archivados”.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleArchive}
+            disabled={pending}
+            className="px-5 py-2 text-sm font-semibold bg-red-500/90 hover:bg-red-500 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {pending ? "Archivando..." : "Archivar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Panel: archivados (restaurar) ──────────────────────────────────────────────
+
+function ArchivedPanel({ archived, onClose }: { archived: ArchivedMember[]; onClose: () => void }) {
+  const [pending, startTransition] = useTransition();
+
+  function handleRestore(id: string) {
+    startTransition(async () => {
+      try {
+        await restoreMember(id);
+        toast.success("Usuario restaurado");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al restaurar");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-lg uppercase tracking-tight">
+            Archivados ({archived.length})
+          </h2>
+          <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">
+            ✕
+          </button>
+        </div>
+        {archived.length === 0 ? (
+          <p className="text-fg/40 text-sm text-center py-8">No hay usuarios archivados.</p>
+        ) : (
+          <div className="space-y-2">
+            {archived.map((a) => (
+              <div
+                key={a.id}
+                className="flex items-center gap-3 bg-white/5 border border-line rounded-xl px-3 py-2"
+              >
+                <Avatar name={a.full_name} url={a.photo_url} size={32} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{a.full_name}</p>
+                  <p className="text-fg/40 text-xs">{a.phone}</p>
+                </div>
+                <button
+                  onClick={() => handleRestore(a.id)}
+                  disabled={pending}
+                  className="text-xs text-accent hover:text-accent/70 border border-accent/40 hover:border-accent px-2.5 py-1 rounded transition-colors disabled:opacity-40"
+                >
+                  Restaurar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function MembersClient({ members }: Props) {
+export default function MembersClient({ members, plans, archived }: Props) {
   const [modal, setModal] = useState<Modal>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [assign, setAssign] = useState<Member | null>(null);
+  const [archiving, setArchiving] = useState<Member | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(12);
@@ -383,6 +694,12 @@ export default function MembersClient({ members }: Props) {
           >
             ↓ Excel
           </button>
+          <button
+            onClick={() => setShowArchived(true)}
+            className="px-3 py-2 border border-line text-fg/60 hover:text-fg text-xs rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            🗄 Archivados{archived.length > 0 ? ` (${archived.length})` : ""}
+          </button>
           <span className="px-3 py-2 bg-accent text-white text-xs font-bold rounded-lg">
             Total: {total}
           </span>
@@ -407,6 +724,7 @@ export default function MembersClient({ members }: Props) {
                     <th className="text-left px-4 py-3 hidden lg:table-cell">Email</th>
                     <th className="text-left px-4 py-3 hidden xl:table-cell">Inscripción</th>
                     <th className="text-left px-4 py-3">Membresía</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -417,21 +735,29 @@ export default function MembersClient({ members }: Props) {
                         key={m.id}
                         className="border-b border-line/50 last:border-0 hover:bg-white/[0.04] transition-colors"
                       >
-                        {/* Nombre */}
+                        {/* Nombre + foto + membresía */}
                         <td className="px-4 py-3">
-                          <Link
-                            href={`/admin/miembros/${m.id}`}
-                            className="flex items-center gap-1.5 group"
-                          >
-                            <span className="text-accent group-hover:underline font-medium">
-                              {m.full_name}
-                            </span>
-                            {bdThisMonth && (
-                              <span title="Cumpleaños este mes" className="text-base leading-none">
-                                🎂
-                              </span>
-                            )}
-                          </Link>
+                          <div className="flex items-center gap-2.5">
+                            <Avatar name={m.full_name} url={m.photo_url} />
+                            <div className="min-w-0">
+                              <Link
+                                href={`/admin/miembros/${m.id}`}
+                                className="flex items-center gap-1.5 group"
+                              >
+                                <span className="text-accent group-hover:underline font-medium">
+                                  {m.full_name}
+                                </span>
+                                {bdThisMonth && (
+                                  <span title="Cumpleaños este mes" className="text-base leading-none">
+                                    🎂
+                                  </span>
+                                )}
+                              </Link>
+                              <div className="mt-1">
+                                <PlanInline member={m} onAssign={() => setAssign(m)} />
+                              </div>
+                            </div>
+                          </div>
                         </td>
 
                         {/* Cumpleaños */}
@@ -462,6 +788,17 @@ export default function MembersClient({ members }: Props) {
                         {/* Membresía */}
                         <td className="px-4 py-3">
                           <MembershipBadge member={m} />
+                        </td>
+
+                        {/* Acciones */}
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => setArchiving(m)}
+                            title="Archivar usuario"
+                            className="text-fg/25 hover:text-red-400 transition-colors text-base leading-none p-1"
+                          >
+                            🗑
+                          </button>
                         </td>
                       </tr>
                     );
@@ -607,6 +944,21 @@ export default function MembersClient({ members }: Props) {
 
       {/* ── Modal (invitar a registrarse) ─────────────────────────────────── */}
       {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
+
+      {/* ── Modal asignar / cambiar membresía ─────────────────────────────── */}
+      {assign && (
+        <AssignPlanModal member={assign} plans={plans} onClose={() => setAssign(null)} />
+      )}
+
+      {/* ── Modal confirmar archivado ─────────────────────────────────────── */}
+      {archiving && (
+        <ConfirmArchiveModal member={archiving} onClose={() => setArchiving(null)} />
+      )}
+
+      {/* ── Panel archivados ──────────────────────────────────────────────── */}
+      {showArchived && (
+        <ArchivedPanel archived={archived} onClose={() => setShowArchived(false)} />
+      )}
     </>
   );
 }

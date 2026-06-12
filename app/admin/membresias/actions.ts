@@ -157,3 +157,29 @@ export async function cancelMembership(membershipId: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/admin/membresias");
 }
+
+// ── Editar fechas de una membresía existente ───────────────────────────────────
+
+export async function updateMembership(
+  membershipId: string,
+  startDate: string,
+  endDate: string
+) {
+  const supabase = await createClient();
+
+  if (!startDate || !endDate) throw new Error("Las fechas son obligatorias");
+  if (new Date(endDate) < new Date(startDate)) {
+    throw new Error("La fecha de fin no puede ser anterior a la de inicio");
+  }
+
+  const { error } = await supabase
+    .from("memberships")
+    .update({ start_date: startDate, end_date: endDate })
+    .eq("id", membershipId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/membresias");
+  revalidatePath("/admin/miembros");
+  revalidatePath("/admin");
+}

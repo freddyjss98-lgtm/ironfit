@@ -26,11 +26,12 @@ export default async function ReservasPage() {
 
     supabase
       .from("class_bookings")
-      .select("id, schedule_id, member_id, booking_date, status, created_at, members(full_name, phone)")
+      .select("id, schedule_id, member_id, booking_date, start_time, end_time, status, created_at, members(full_name, phone)")
       .gte("booking_date", today)
       .lte("booking_date", next14)
       .neq("status", "cancelled")
       .order("booking_date")
+      .order("start_time")
       .order("created_at"),
 
     supabase
@@ -45,6 +46,8 @@ export default async function ReservasPage() {
     schedule_id: string;
     member_id: string;
     booking_date: string;
+    start_time: string | null;
+    end_time: string | null;
     status: string;
     created_at: string;
     members: { full_name: string; phone: string } | null;
@@ -57,6 +60,8 @@ export default async function ReservasPage() {
       schedule_id: raw.schedule_id,
       member_id: raw.member_id,
       booking_date: raw.booking_date,
+      start_time: raw.start_time,
+      end_time: raw.end_time,
       status: raw.status,
       member_name: raw.members?.full_name ?? "—",
       member_phone: raw.members?.phone ?? "—",

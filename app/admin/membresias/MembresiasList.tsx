@@ -2,8 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { renewMembership, cancelMembership } from "./actions";
+import { renewMembership, cancelMembership, updateMembership } from "./actions";
 import NewMembershipForm from "./NewMembershipForm";
+
+const inputCls =
+  "w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -76,9 +79,88 @@ function WhatsAppIcon() {
   );
 }
 
+// ── Modal: editar fechas de la membresía ───────────────────────────────────────
+
+function EditMembershipModal({
+  membership,
+  onClose,
+}: {
+  membership: Membership;
+  onClose: () => void;
+}) {
+  const [startDate, setStartDate] = useState(membership.start_date);
+  const [endDate, setEndDate] = useState(membership.end_date);
+  const [pending, startTransition] = useTransition();
+
+  function handleSave() {
+    startTransition(async () => {
+      try {
+        await updateMembership(membership.id, startDate, endDate);
+        toast.success("Fechas actualizadas");
+        onClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al actualizar");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-display text-lg uppercase tracking-tight">Editar fechas</h2>
+          <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">
+            ✕
+          </button>
+        </div>
+        <p className="text-fg/40 text-xs mb-5">
+          {membership.full_name} · {membership.plan_name}
+        </p>
+
+        <div className="space-y-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-fg/50 text-xs uppercase tracking-wider">Fecha de inicio</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-fg/50 text-xs uppercase tracking-wider">Fecha de fin</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-line">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={pending}
+            className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {pending ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Row component ──────────────────────────────────────────────────────────────
 
-function MembresiaRow({ m }: { m: Membership }) {
+function MembresiaRow({ m, onEdit }: { m: Membership; onEdit: (m: Membership) => void }) {
   const [renewPending, startRenew] = useTransition();
   const [cancelPending, startCancel] = useTransition();
 
@@ -134,6 +216,12 @@ function MembresiaRow({ m }: { m: Membership }) {
       <td className="px-4 py-3 text-right">
         <div className="flex items-center gap-1.5 justify-end">
           <button
+            onClick={() => onEdit(m)}
+            className="text-xs text-fg/50 hover:text-fg border border-line hover:border-fg/40 px-2.5 py-1 rounded transition-colors"
+          >
+            Editar
+          </button>
+          <button
             disabled={renewPending}
             onClick={() =>
               startRenew(async () => {
@@ -179,10 +267,12 @@ function MembresiaSection({
   title,
   rows,
   csvFilename,
+  onEdit,
 }: {
   title: string;
   rows: Membership[];
   csvFilename: string;
+  onEdit: (m: Membership) => void;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -258,7 +348,7 @@ function MembresiaSection({
                 </thead>
                 <tbody>
                   {paged.map((m) => (
-                    <MembresiaRow key={m.id} m={m} />
+                    <MembresiaRow key={m.id} m={m} onEdit={onEdit} />
                   ))}
                 </tbody>
               </table>
@@ -318,11 +408,16 @@ function MembresiaSection({
 
 export default function MembresiasList({ memberships, members, plans }: Props) {
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Membership | null>(null);
 
   const expired = memberships.filter((m) => m.effective_status === "expired");
   const active = memberships.filter((m) => m.effective_status === "active");
   const suspended = memberships.filter(
     (m) => m.effective_status === "suspended" || m.effective_status === "cancelled"
+  );
+  // Por vencer: activas que vencen en los próximos 7 días (incluye hoy)
+  const expiringSoon = active.filter(
+    (m) => m.days_until_expiry >= 0 && m.days_until_expiry <= 7
   );
 
   return (
@@ -337,24 +432,42 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
         </button>
       </div>
 
-      {/* Three stacked sections */}
+      {/* Stacked sections */}
       <div className="space-y-8">
+        {expiringSoon.length > 0 && (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4">
+            <MembresiaSection
+              title="⚠ Por Vencer (próximos 7 días)"
+              rows={expiringSoon}
+              csvFilename="membresias_por_vencer.csv"
+              onEdit={setEditing}
+            />
+          </div>
+        )}
         <MembresiaSection
           title="Lista de Membresías Vencidas"
           rows={expired}
           csvFilename="membresias_vencidas.csv"
+          onEdit={setEditing}
         />
         <MembresiaSection
           title="Lista de Membresías Activas"
           rows={active}
           csvFilename="membresias_activas.csv"
+          onEdit={setEditing}
         />
         <MembresiaSection
           title="Lista de Membresías Suspendidas"
           rows={suspended}
           csvFilename="membresias_suspendidas.csv"
+          onEdit={setEditing}
         />
       </div>
+
+      {/* Modal editar fechas */}
+      {editing && (
+        <EditMembershipModal membership={editing} onClose={() => setEditing(null)} />
+      )}
 
       {/* Modal nueva membresía */}
       {showForm && (

@@ -23,6 +23,8 @@ type Booking = {
   schedule_id: string;
   member_id: string;
   booking_date: string;
+  start_time: string | null;
+  end_time: string | null;
   status: string;
   member_name: string;
   member_phone: string;
@@ -365,7 +367,15 @@ function BookingRow({ booking }: { booking: Booking }) {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{booking.member_name}</p>
-        <p className="text-fg/40 text-xs">{booking.member_phone}</p>
+        <p className="text-fg/40 text-xs">
+          {booking.member_phone}
+          {booking.start_time && (
+            <span className="ml-2 text-accent/80">
+              🕐 {fmt12h(booking.start_time)}
+              {booking.end_time ? `–${fmt12h(booking.end_time)}` : ""}
+            </span>
+          )}
+        </p>
       </div>
 
       {/* Status badge */}

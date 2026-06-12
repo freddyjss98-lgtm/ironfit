@@ -17,7 +17,7 @@ export default async function PortalLoginPage({ searchParams }: Props) {
             src="/logo/logo-horizontal.png"
             alt="Iron Fit Club"
             width={160}
-            height={48}
+            height={25}
             className="mx-auto mb-3"
           />
           <p className="text-white/40 text-sm">Tu área de atleta</p>
