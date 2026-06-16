@@ -2,7 +2,9 @@
 
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
+import { toast } from "sonner";
 import { createMember, updateMember, uploadMemberPhoto } from "./actions";
+import { createMemberWithAccess, type AccessCredentials } from "./accessActions";
 
 type Member = {
   id: string;
@@ -33,6 +35,11 @@ export default function MemberForm({ member, onClose }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(member?.photo_url ?? null);
+  // Acceso al portal (solo al crear un socio nuevo)
+  const [createAccess, setCreateAccess] = useState(false);
+  const [credentials, setCredentials] = useState<AccessCredentials | null>(null);
+  const [createdPhone, setCreatedPhone] = useState("");
+  const [createdName, setCreatedName] = useState("");
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -56,15 +63,33 @@ export default function MemberForm({ member, onClose }: Props) {
 
         if (member) {
           await updateMember(member.id, fd);
+          onClose();
+        } else if (createAccess) {
+          const creds = await createMemberWithAccess(fd);
+          // No cerramos: mostramos las credenciales una sola vez.
+          setCreatedPhone((fd.get("phone") as string) ?? "");
+          setCreatedName((fd.get("full_name") as string) ?? "");
+          setCredentials(creds);
         } else {
           await createMember(fd);
           formRef.current?.reset();
+          onClose();
         }
-        onClose();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al guardar");
       }
     });
+  }
+
+  if (credentials) {
+    return (
+      <CredentialsPanel
+        credentials={credentials}
+        memberName={createdName}
+        memberPhone={createdPhone}
+        onClose={onClose}
+      />
+    );
   }
 
   return (
@@ -129,13 +154,16 @@ export default function MemberForm({ member, onClose }: Props) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className={labelCls}>Correo</label>
+          <label className={labelCls}>
+            Correo {createAccess && <span className="text-accent">*</span>}
+          </label>
           <input
             name="email"
             type="email"
+            required={createAccess}
             defaultValue={member?.email ?? ""}
             className={inputCls}
-            placeholder="opcional"
+            placeholder={createAccess ? "será su usuario de acceso" : "opcional"}
           />
         </div>
 
@@ -191,6 +219,31 @@ export default function MemberForm({ member, onClose }: Props) {
         </div>
       </div>
 
+      {/* Acceso al portal — solo al crear un socio nuevo */}
+      {!member && (
+        <label
+          className={`flex items-start gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
+            createAccess
+              ? "border-accent/50 bg-accent/5"
+              : "border-line hover:border-white/25"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={createAccess}
+            onChange={(e) => setCreateAccess(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-accent shrink-0"
+          />
+          <span className="text-sm">
+            <span className="font-medium text-fg">Crear acceso al portal</span>
+            <span className="block text-fg/45 text-xs mt-0.5">
+              Genera un usuario y una contraseña temporal para que el socio entre al
+              portal y vea sus datos. Requiere correo. La cambiará en su primer ingreso.
+            </span>
+          </span>
+        </label>
+      )}
+
       <div className="flex gap-3 justify-end pt-2">
         <button
           type="button"
@@ -204,9 +257,142 @@ export default function MemberForm({ member, onClose }: Props) {
           disabled={pending}
           className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors disabled:opacity-50"
         >
-          {pending ? "Guardando..." : member ? "Actualizar" : "Crear miembro"}
+          {pending
+            ? "Guardando..."
+            : member
+            ? "Actualizar"
+            : createAccess
+            ? "Crear miembro y acceso"
+            : "Crear miembro"}
         </button>
       </div>
     </form>
+  );
+}
+
+// ── Panel de credenciales: se muestra una sola vez tras crear el acceso ──────────
+
+function CredentialsPanel({
+  credentials,
+  memberName,
+  memberPhone,
+  onClose,
+}: {
+  credentials: AccessCredentials;
+  memberName: string;
+  memberPhone: string;
+  onClose: () => void;
+}) {
+  const portalUrl =
+    (typeof window !== "undefined" ? window.location.origin : "https://ironfitclub.vercel.app") +
+    "/portal/login";
+
+  const firstName = memberName.trim().split(/\s+/)[0] || "";
+
+  const message =
+    `¡Hola ${firstName}! 💪 Ya tienes acceso al portal de *Iron Fit Club*.\n\n` +
+    `Ingresa aquí: ${portalUrl}\n` +
+    `Usuario: ${credentials.email}\n` +
+    `Contraseña temporal: ${credentials.tempPassword}\n\n` +
+    `Por seguridad, te pedirá crear tu propia contraseña la primera vez.`;
+
+  function normalizePhone(phone: string) {
+    const digits = phone.replace(/\D/g, "");
+    if (!digits) return "";
+    return digits.startsWith("593")
+      ? digits
+      : digits.startsWith("0")
+      ? "593" + digits.slice(1)
+      : "593" + digits;
+  }
+
+  async function copy(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copiado`);
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  }
+
+  function sendWhatsApp() {
+    const normalized = normalizePhone(memberPhone);
+    const url = normalized
+      ? `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-emerald-300 text-sm">
+        ✓ Socio creado con acceso al portal. Comparte estas credenciales{" "}
+        <span className="font-semibold">ahora</span> — la contraseña no se vuelve a mostrar.
+      </div>
+
+      <div className="space-y-2">
+        <CredRow label="Usuario (correo)" value={credentials.email} onCopy={() => copy(credentials.email, "Usuario")} />
+        <CredRow
+          label="Contraseña temporal"
+          value={credentials.tempPassword}
+          mono
+          onCopy={() => copy(credentials.tempPassword, "Contraseña")}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-line">
+        <button
+          type="button"
+          onClick={() => copy(message, "Mensaje")}
+          className="px-3 py-2 text-xs text-fg/60 hover:text-fg border border-line rounded-lg transition-colors"
+        >
+          Copiar mensaje
+        </button>
+        <button
+          type="button"
+          onClick={sendWhatsApp}
+          className="px-4 py-2 text-xs font-bold bg-[#25d366] hover:bg-[#1fb855] text-white rounded-lg transition-colors"
+        >
+          Enviar por WhatsApp
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors"
+        >
+          Listo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CredRow({
+  label,
+  value,
+  mono,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 bg-white/5 border border-line rounded-lg px-3 py-2.5">
+      <div className="min-w-0">
+        <p className={labelCls}>{label}</p>
+        <p className={`text-fg text-sm truncate ${mono ? "font-mono tracking-wide" : ""}`}>
+          {value}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="shrink-0 text-xs text-fg/60 hover:text-fg border border-line hover:border-accent/40 rounded-md px-2.5 py-1 transition-colors"
+      >
+        Copiar
+      </button>
+    </div>
   );
 }

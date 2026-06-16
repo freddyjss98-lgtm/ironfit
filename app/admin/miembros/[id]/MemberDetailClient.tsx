@@ -14,6 +14,12 @@ import {
   uploadMemberPhoto,
   uploadProgressPhoto,
 } from "./actions";
+import {
+  createMemberAccess,
+  resetMemberPassword,
+  revokeMemberAccess,
+  type AccessCredentials,
+} from "../accessActions";
 
 type Member = {
   id: string;
@@ -434,6 +440,9 @@ export default function MemberDetailClient({
         </div>
       </div>
 
+      {/* ACCESO AL PORTAL */}
+      <PortalAccessCard member={member} />
+
       {/* TABS */}
       <div className="flex gap-1 border-b border-line overflow-x-auto">
         {TABS.map((t) => (
@@ -484,6 +493,309 @@ export default function MemberDetailClient({
       {showRoleMenu && (
         <div className="fixed inset-0 z-20" onClick={() => setShowRoleMenu(false)} />
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ACCESO AL PORTAL
+// ═══════════════════════════════════════════════════════════════════════════
+
+function normalizePhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.startsWith("593")
+    ? digits
+    : digits.startsWith("0")
+    ? "593" + digits.slice(1)
+    : "593" + digits;
+}
+
+function PortalAccessCard({ member }: { member: Member }) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [creds, setCreds] = useState<AccessCredentials | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const hasAccess = Boolean(member.user_id);
+
+  function handleReset() {
+    if (!member.user_id) return;
+    startTransition(async () => {
+      try {
+        const { tempPassword } = await resetMemberPassword(member.id, member.user_id!);
+        setCreds({ email: member.email ?? "", tempPassword });
+        toast.success("Contraseña reseteada");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al resetear");
+      }
+    });
+  }
+
+  return (
+    <div className="bg-white/5 border border-line rounded-2xl p-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${hasAccess ? "bg-emerald-400" : "bg-fg/25"}`}
+          />
+          <div>
+            <p className="text-sm font-semibold">Acceso al portal</p>
+            <p className="text-fg/45 text-xs">
+              {hasAccess
+                ? `Activo · ${member.email ?? "sin correo"}`
+                : "El socio aún no puede ingresar al portal"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          {hasAccess ? (
+            <>
+              <button
+                onClick={handleReset}
+                disabled={pending}
+                className="px-3 py-1.5 text-xs font-semibold bg-white/8 border border-line/40 text-fg/70 hover:text-fg hover:border-accent/40 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {pending ? "..." : "Resetear contraseña"}
+              </button>
+              <button
+                onClick={() => setConfirmRevoke(true)}
+                disabled={pending}
+                className="px-3 py-1.5 text-xs font-semibold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Revocar
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="px-3 py-1.5 text-xs font-bold bg-accent hover:bg-accent/85 text-white rounded-lg transition-colors"
+            >
+              Crear acceso al portal
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showCreate && (
+        <CreateAccessModal
+          member={member}
+          onClose={() => setShowCreate(false)}
+          onCreated={(c) => {
+            setShowCreate(false);
+            setCreds(c);
+          }}
+        />
+      )}
+
+      {creds && (
+        <CredentialsModal
+          credentials={creds}
+          memberName={member.full_name}
+          memberPhone={member.phone}
+          onClose={() => setCreds(null)}
+        />
+      )}
+
+      {confirmRevoke && member.user_id && (
+        <ConfirmRevokeModal
+          memberId={member.id}
+          userId={member.user_id}
+          memberName={member.full_name}
+          onClose={() => setConfirmRevoke(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreateAccessModal({
+  member,
+  onClose,
+  onCreated,
+}: {
+  member: Member;
+  onClose: () => void;
+  onCreated: (creds: AccessCredentials) => void;
+}) {
+  const [email, setEmail] = useState(member.email ?? "");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handle() {
+    setError(null);
+    if (!email.trim()) {
+      setError("El correo es obligatorio");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const creds = await createMemberAccess(member.id, email.trim(), member.full_name);
+        toast.success("Acceso creado");
+        onCreated(creds);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Error al crear acceso");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+      <div className="bg-bg-2 border border-line rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-display text-lg uppercase tracking-tight">Crear acceso</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-fg/40 hover:text-fg text-lg transition-colors">✕</button>
+        </div>
+        <p className="text-fg/40 text-xs mb-5">{member.full_name}</p>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
+        )}
+
+        <div className="flex flex-col gap-1.5 mb-5">
+          <label className={labelCls}>Correo (será su usuario) *</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={inputCls}
+            placeholder="socio@correo.com"
+          />
+          <p className="text-fg/30 text-xs">
+            Se generará una contraseña temporal que el socio cambiará al ingresar.
+          </p>
+        </div>
+
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2.5 text-sm text-fg/50 hover:text-fg border border-line rounded-xl transition-colors">Cancelar</button>
+          <button onClick={handle} disabled={pending} className="px-5 py-2.5 text-sm font-bold bg-accent hover:bg-accent/85 text-white rounded-xl transition-colors disabled:opacity-50">
+            {pending ? "Creando..." : "Crear acceso"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmRevokeModal({
+  memberId,
+  userId,
+  memberName,
+  onClose,
+}: {
+  memberId: string;
+  userId: string;
+  memberName: string;
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+
+  function handle() {
+    startTransition(async () => {
+      try {
+        await revokeMemberAccess(memberId, userId);
+        toast.success("Acceso revocado");
+        onClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al revocar");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+      <div className="bg-bg-2 border border-line rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+        <h2 className="font-display text-lg uppercase tracking-tight mb-2">¿Revocar acceso?</h2>
+        <p className="text-fg/60 text-sm mb-1">
+          <span className="text-fg font-semibold">{memberName}</span> ya no podrá ingresar al portal.
+        </p>
+        <p className="text-fg/40 text-xs mb-6">
+          Se elimina su usuario de acceso. Sus datos (asistencias, pagos, progreso) se
+          conservan. Puedes volver a crear el acceso después.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2.5 text-sm text-fg/50 hover:text-fg border border-line rounded-xl transition-colors">Cancelar</button>
+          <button onClick={handle} disabled={pending} className="px-5 py-2.5 text-sm font-bold bg-red-500/90 hover:bg-red-500 text-white rounded-xl transition-colors disabled:opacity-50">
+            {pending ? "Revocando..." : "Revocar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CredentialsModal({
+  credentials,
+  memberName,
+  memberPhone,
+  onClose,
+}: {
+  credentials: AccessCredentials;
+  memberName: string;
+  memberPhone: string;
+  onClose: () => void;
+}) {
+  const portalUrl =
+    (typeof window !== "undefined" ? window.location.origin : "https://ironfitclub.vercel.app") +
+    "/portal/login";
+  const firstName = memberName.trim().split(/\s+/)[0] || "";
+
+  const message =
+    `¡Hola ${firstName}! 💪 Ya tienes acceso al portal de *Iron Fit Club*.\n\n` +
+    `Ingresa aquí: ${portalUrl}\n` +
+    `Usuario: ${credentials.email}\n` +
+    `Contraseña temporal: ${credentials.tempPassword}\n\n` +
+    `Por seguridad, te pedirá crear tu propia contraseña la primera vez.`;
+
+  async function copy(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copiado`);
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  }
+
+  function sendWhatsApp() {
+    const normalized = normalizePhone(memberPhone);
+    const url = normalized
+      ? `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+      <div className="bg-bg-2 border border-line rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-emerald-300 text-sm">
+          ✓ Comparte estas credenciales <span className="font-semibold">ahora</span> — la
+          contraseña no se vuelve a mostrar.
+        </div>
+
+        <div className="space-y-2">
+          <div className="bg-white/5 border border-line rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className={labelCls}>Usuario (correo)</p>
+              <p className="text-fg text-sm truncate">{credentials.email}</p>
+            </div>
+            <button onClick={() => copy(credentials.email, "Usuario")} className="shrink-0 text-xs text-fg/60 hover:text-fg border border-line hover:border-accent/40 rounded-md px-2.5 py-1 transition-colors">Copiar</button>
+          </div>
+          <div className="bg-white/5 border border-line rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className={labelCls}>Contraseña temporal</p>
+              <p className="text-fg text-sm font-mono tracking-wide truncate">{credentials.tempPassword}</p>
+            </div>
+            <button onClick={() => copy(credentials.tempPassword, "Contraseña")} className="shrink-0 text-xs text-fg/60 hover:text-fg border border-line hover:border-accent/40 rounded-md px-2.5 py-1 transition-colors">Copiar</button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-line">
+          <button onClick={() => copy(message, "Mensaje")} className="px-3 py-2 text-xs text-fg/60 hover:text-fg border border-line rounded-lg transition-colors">Copiar mensaje</button>
+          <button onClick={sendWhatsApp} className="px-4 py-2 text-xs font-bold bg-[#25d366] hover:bg-[#1fb855] text-white rounded-lg transition-colors">Enviar por WhatsApp</button>
+          <button onClick={onClose} className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors">Listo</button>
+        </div>
+      </div>
     </div>
   );
 }

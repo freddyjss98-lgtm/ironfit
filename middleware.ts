@@ -78,6 +78,16 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
+
+    // Acceso creado por el admin con contraseña temporal → obligar a cambiarla
+    // antes de usar cualquier otra pantalla del portal.
+    const mustChange = user.user_metadata?.must_change_password === true;
+    if (mustChange && pathname !== "/portal/cambiar-clave") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/portal/cambiar-clave";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   // Ya logueado en el login → enrutar por rol
