@@ -232,7 +232,7 @@ export function bookingPromptText(
 ): string {
   const dia = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
   const lines = options
-    .map((o) => `*${o.n})* ${formatTime(o.start_time)}  ${o.name}`)
+    .map((o) => `*${o.n})* ${formatTime(o.start_time)}–${formatTime(o.end_time)}  ${o.name}`)
     .join("\n");
   return (
     `📅 *Reservar clase — ${dia}*\n\n` +
