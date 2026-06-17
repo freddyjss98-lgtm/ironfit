@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { checkInMember, deleteAttendance } from "./actions";
 
@@ -22,9 +23,20 @@ type Attendance = {
   minutes_since_checkin: number;
 };
 
+type RosterMember = {
+  id: string;
+  full_name: string;
+  phone: string;
+  total_visits: number;
+  visits_this_month: number;
+  visits_last_7_days: number;
+  last_visit: string | null;
+};
+
 type Props = {
   members: Member[];
   todayAttendances: Attendance[];
+  roster: RosterMember[];
 };
 
 function fmtTime(iso: string) {
@@ -34,7 +46,8 @@ function fmtTime(iso: string) {
   });
 }
 
-export default function AsistenciaClient({ members, todayAttendances }: Props) {
+export default function AsistenciaClient({ members, todayAttendances, roster }: Props) {
+  const [tab, setTab] = useState<"registrar" | "historial">("registrar");
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -110,7 +123,28 @@ export default function AsistenciaClient({ members, todayAttendances }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-5">
+      {/* Pestañas */}
+      <div className="flex gap-1 border-b border-line">
+        {(["registrar", "historial"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+              tab === t
+                ? "border-accent text-fg"
+                : "border-transparent text-fg/40 hover:text-fg/70"
+            }`}
+          >
+            {t === "registrar" ? "Registrar check-in" : "Historial por atleta"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "historial" ? (
+        <HistorialTab roster={roster} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* COLUMNA IZQUIERDA: Búsqueda y check-in */}
       <div className="space-y-4">
         <div>
@@ -243,6 +277,99 @@ export default function AsistenciaClient({ members, todayAttendances }: Props) {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pestaña: historial de asistencia por atleta ────────────────────────────────
+
+function HistorialTab({ roster }: { roster: RosterMember[] }) {
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    const list = q
+      ? roster.filter(
+          (r) => r.full_name.toLowerCase().includes(q) || r.phone.includes(q)
+        )
+      : roster;
+    // Última visita más reciente primero; los que nunca vinieron, al final.
+    return [...list].sort((a, b) => {
+      if (a.last_visit && b.last_visit) return a.last_visit < b.last_visit ? 1 : -1;
+      if (a.last_visit) return -1;
+      if (b.last_visit) return 1;
+      return a.full_name.localeCompare(b.full_name);
+    });
+  }, [roster, search]);
+
+  function fmtLastVisit(s: string | null): string {
+    if (!s) return "Nunca";
+    const d = new Date(s + "T00:00:00");
+    const days = Math.round((Date.now() - d.getTime()) / 86_400_000);
+    const label = d.toLocaleDateString("es-EC", { day: "numeric", month: "short" });
+    if (days <= 0) return `${label} · hoy`;
+    if (days === 1) return `${label} · ayer`;
+    return `${label} · hace ${days}d`;
+  }
+
+  return (
+    <div className="space-y-4">
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Buscar atleta por nombre o teléfono..."
+        className="w-full sm:max-w-sm bg-white/5 border border-line text-fg text-sm rounded-lg px-3 py-2 outline-none focus:border-accent transition-colors placeholder:text-fg/30"
+      />
+
+      <div className="bg-white/5 border border-line rounded-xl overflow-hidden">
+        {filtered.length === 0 ? (
+          <p className="text-fg/40 text-sm text-center py-12">Sin atletas que mostrar</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-fg/40 text-xs uppercase tracking-wider bg-white/[0.02]">
+                  <th className="text-left px-4 py-3">Atleta</th>
+                  <th className="text-left px-4 py-3">Última visita</th>
+                  <th className="text-right px-4 py-3">Este mes</th>
+                  <th className="text-right px-4 py-3 hidden sm:table-cell">Últimos 7d</th>
+                  <th className="text-right px-4 py-3">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-b border-line/50 last:border-0 hover:bg-white/[0.04] transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/admin/miembros/${r.id}`}
+                        className="text-accent hover:underline font-medium"
+                      >
+                        {r.full_name}
+                      </Link>
+                      <p className="text-fg/40 text-xs">{r.phone}</p>
+                    </td>
+                    <td className={`px-4 py-3 ${r.last_visit ? "text-fg/70" : "text-fg/30"}`}>
+                      {fmtLastVisit(r.last_visit)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-accent">
+                      {r.visits_this_month}
+                    </td>
+                    <td className="px-4 py-3 text-right text-fg/60 hidden sm:table-cell">
+                      {r.visits_last_7_days}
+                    </td>
+                    <td className="px-4 py-3 text-right text-fg/70">{r.total_visits}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -24,6 +24,7 @@ export async function getDashboardStats() {
     currentActiveMshpsRaw,
     activeMembersDetailRaw,
     attendanceStatsRaw,
+    pendingRenewalsRaw,
   ] = await Promise.all([
     supabase
       .from("vw_members_with_active_membership")
@@ -105,6 +106,12 @@ export async function getDashboardStats() {
 
     // Last visit per member
     supabase.from("vw_attendance_stats").select("member_id, last_visit"),
+
+    // Solicitudes de renovación pendientes (notificación del dashboard)
+    supabase
+      .from("renewal_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
   ]);
 
   // ── Top 5 items by revenue ────────────────────────────────────────────────
@@ -240,6 +247,7 @@ export async function getDashboardStats() {
     membershipDistrib,
     atRiskMembers,
     atRiskCount: atRiskMembers.length,
+    pendingRenewals: pendingRenewalsRaw.count ?? 0,
   };
 }
 

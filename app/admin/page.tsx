@@ -61,6 +61,38 @@ function KpiCard({
   );
 }
 
+function NotifCard({
+  href,
+  icon,
+  count,
+  title,
+  desc,
+  cls,
+}: {
+  href: string;
+  icon: string;
+  count: number;
+  title: string;
+  desc: string;
+  cls: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group flex items-center gap-3 border rounded-xl px-4 py-4 transition-colors hover:brightness-110 ${cls}`}
+    >
+      <span className="text-2xl shrink-0">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm">
+          {count} {title}
+        </p>
+        <p className="text-fg/50 text-xs mt-0.5">{desc}</p>
+      </div>
+      <span className="shrink-0 text-sm opacity-60 group-hover:opacity-100 transition-opacity">→</span>
+    </Link>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
@@ -75,25 +107,42 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* ─── Notificación: membresías por vencer ─────────────────────────── */}
-      {stats.expiring7Days > 0 && (
-        <Link
-          href="/admin/membresias"
-          className="flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-5 py-4 hover:bg-amber-500/15 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⏰</span>
-            <div>
-              <p className="text-amber-300 font-semibold text-sm">
-                {stats.expiring7Days} membresía{stats.expiring7Days !== 1 ? "s" : ""} por vencer en los próximos 7 días
-              </p>
-              <p className="text-fg/50 text-xs mt-0.5">
-                Revisa la lista y contacta a los socios para renovar.
-              </p>
-            </div>
+      {/* ─── Notificaciones: acciones pendientes ─────────────────────────── */}
+      {(stats.pendingRenewals > 0 || stats.expiring7Days > 0 || stats.atRiskCount > 0) && (
+        <Section title="Notificaciones">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {stats.pendingRenewals > 0 && (
+              <NotifCard
+                href="/admin/renovaciones"
+                icon="🔄"
+                count={stats.pendingRenewals}
+                title={`Solicitud${stats.pendingRenewals !== 1 ? "es" : ""} de renovación`}
+                desc="Socios que pagaron y esperan aprobación"
+                cls="bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+              />
+            )}
+            {stats.expiring7Days > 0 && (
+              <NotifCard
+                href="/admin/recordatorios"
+                icon="⏰"
+                count={stats.expiring7Days}
+                title="Membresías por vencer (7 días)"
+                desc="Contáctalos para renovar a tiempo"
+                cls="bg-amber-500/10 border-amber-500/30 text-amber-300"
+              />
+            )}
+            {stats.atRiskCount > 0 && (
+              <NotifCard
+                href="/admin/recordatorios"
+                icon="😴"
+                count={stats.atRiskCount}
+                title="Socios en riesgo"
+                desc="Activos sin venir hace ≥10 días"
+                cls="bg-orange-500/10 border-orange-500/30 text-orange-300"
+              />
+            )}
           </div>
-          <span className="text-amber-300 text-sm shrink-0 font-medium">Ver →</span>
-        </Link>
+        </Section>
       )}
 
       {/* ─── Ventas ──────────────────────────────────────────────────────── */}
