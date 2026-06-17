@@ -8,6 +8,8 @@ import {
   deleteCoach,
   promoteMemberToCoach,
   revokeCoachPanelAccess,
+  grantCoachPanelAccess,
+  type CoachCredentials,
 } from "./actions";
 
 type Coach = {
@@ -253,12 +255,89 @@ function EditCoachForm({ coach, onClose }: { coach: Coach; onClose: () => void }
   );
 }
 
+// ─── Credentials Modal (acceso recién creado) ──────────────────────────────────
+
+function CredentialsModal({
+  coachName,
+  credentials,
+  onClose,
+}: {
+  coachName: string;
+  credentials: CoachCredentials;
+  onClose: () => void;
+}) {
+  async function copyAll() {
+    const text = `Acceso al panel Iron Fit\nUsuario: ${credentials.email}\nContraseña temporal: ${credentials.tempPassword}\nIngresa en: ${typeof window !== "undefined" ? window.location.origin : ""}/portal/login`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Credenciales copiadas");
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-emerald-500/30 rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg uppercase tracking-tight text-emerald-400">
+            Acceso creado
+          </h2>
+          <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">✕</button>
+        </div>
+
+        <p className="text-fg/50 text-sm">
+          Comparte estas credenciales con <span className="text-fg font-semibold">{coachName}</span>.
+          Por seguridad, <span className="text-amber-400">esta contraseña solo se muestra una vez</span>.
+        </p>
+
+        <div className="space-y-2">
+          <div className="bg-white/5 border border-line rounded-xl px-4 py-3">
+            <p className="text-fg/40 text-xs uppercase tracking-wider">Usuario</p>
+            <p className="text-sm font-mono mt-0.5 break-all">{credentials.email}</p>
+          </div>
+          <div className="bg-white/5 border border-line rounded-xl px-4 py-3">
+            <p className="text-fg/40 text-xs uppercase tracking-wider">Contraseña temporal</p>
+            <p className="text-lg font-mono font-bold mt-0.5 text-emerald-400 tracking-wide">
+              {credentials.tempPassword}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3 justify-end pt-1">
+          <button
+            onClick={copyAll}
+            className="px-4 py-2 text-sm text-fg/60 hover:text-fg border border-line rounded-lg transition-colors"
+          >
+            Copiar todo
+          </button>
+          <button
+            onClick={onClose}
+            className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors"
+          >
+            Listo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Coach Card ────────────────────────────────────────────────────────────────
 
-function CoachCard({ coach, onEdit }: { coach: Coach; onEdit: () => void }) {
+function CoachCard({
+  coach,
+  onEdit,
+  onGranted,
+}: {
+  coach: Coach;
+  onEdit: () => void;
+  onGranted: (coachName: string, creds: CoachCredentials) => void;
+}) {
   const [togglePending, startToggle] = useTransition();
   const [deletePending, startDelete] = useTransition();
   const [revokePending, startRevoke] = useTransition();
+  const [grantPending, startGrant] = useTransition();
 
   function handleDelete() {
     if (!confirm(`¿Eliminar a ${coach.full_name}?\n\n${coach.user_id ? "También se revocará el acceso al panel." : ""}`)) return;
@@ -290,6 +369,21 @@ function CoachCard({ coach, onEdit }: { coach: Coach; onEdit: () => void }) {
       try {
         await revokeCoachPanelAccess(coach.id, coach.user_id!);
         toast.success("Acceso al panel revocado");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error");
+      }
+    });
+  }
+
+  function handleGrantAccess() {
+    startGrant(async () => {
+      try {
+        const { credentials } = await grantCoachPanelAccess(coach.id);
+        if (credentials) {
+          onGranted(coach.full_name, credentials);
+        } else {
+          toast.success("Acceso al panel activado");
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error");
       }
@@ -383,14 +477,22 @@ function CoachCard({ coach, onEdit }: { coach: Coach; onEdit: () => void }) {
           </button>
         </div>
 
-        {/* Quitar acceso al panel — solo si tiene user_id */}
-        {coach.user_id && (
+        {/* Acceso al panel: dar o quitar según estado */}
+        {coach.user_id ? (
           <button
             onClick={handleRevokeAccess}
             disabled={revokePending}
             className="w-full text-xs text-red-400/60 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 py-1.5 rounded-lg transition-colors disabled:opacity-40"
           >
             {revokePending ? "Removiendo acceso..." : "↩ Quitar acceso al panel"}
+          </button>
+        ) : (
+          <button
+            onClick={handleGrantAccess}
+            disabled={grantPending}
+            className="w-full text-xs text-blue-400/80 hover:text-blue-300 border border-blue-500/25 hover:border-blue-500/50 bg-blue-500/5 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+          >
+            {grantPending ? "Creando acceso..." : "🔑 Dar acceso al panel"}
           </button>
         )}
       </div>
@@ -403,9 +505,14 @@ function CoachCard({ coach, onEdit }: { coach: Coach; onEdit: () => void }) {
 export default function CoachesClient({ coaches, eligibleMembers }: Props) {
   const [editCoach, setEditCoach] = useState<Coach | null>(null);
   const [showPromote, setShowPromote] = useState(false);
+  const [creds, setCreds] = useState<{ name: string; credentials: CoachCredentials } | null>(null);
 
   const active = coaches.filter((c) => c.active);
   const inactive = coaches.filter((c) => !c.active);
+
+  function handleGranted(name: string, credentials: CoachCredentials) {
+    setCreds({ name, credentials });
+  }
 
   return (
     <>
@@ -432,7 +539,7 @@ export default function CoachesClient({ coaches, eligibleMembers }: Props) {
               <p className="text-fg/35 text-xs uppercase tracking-widest mb-3">Activos ({active.length})</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {active.map((c) => (
-                  <CoachCard key={c.id} coach={c} onEdit={() => setEditCoach(c)} />
+                  <CoachCard key={c.id} coach={c} onEdit={() => setEditCoach(c)} onGranted={handleGranted} />
                 ))}
               </div>
             </div>
@@ -442,7 +549,7 @@ export default function CoachesClient({ coaches, eligibleMembers }: Props) {
               <p className="text-fg/35 text-xs uppercase tracking-widest mb-3">Inactivos ({inactive.length})</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {inactive.map((c) => (
-                  <CoachCard key={c.id} coach={c} onEdit={() => setEditCoach(c)} />
+                  <CoachCard key={c.id} coach={c} onEdit={() => setEditCoach(c)} onGranted={handleGranted} />
                 ))}
               </div>
             </div>
@@ -452,6 +559,14 @@ export default function CoachesClient({ coaches, eligibleMembers }: Props) {
 
       {showPromote && (
         <PromoteMemberModal members={eligibleMembers} onClose={() => setShowPromote(false)} />
+      )}
+
+      {creds && (
+        <CredentialsModal
+          coachName={creds.name}
+          credentials={creds.credentials}
+          onClose={() => setCreds(null)}
+        />
       )}
 
       {editCoach && (
