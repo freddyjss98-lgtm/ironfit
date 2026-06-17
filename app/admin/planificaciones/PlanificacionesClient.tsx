@@ -637,7 +637,7 @@ export default function PlanificacionesClient({
     const params = new URLSearchParams();
     if (typeId) params.set("typeId", typeId);
     if (programId) params.set("programId", programId);
-    router.push(`/admin/planificaciones?${params.toString()}`);
+    router.push(`/admin/clases?${params.toString()}`);
   }
 
   function handleTypeChange(typeId: string) { navigateTo(typeId, null); }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   createSchedule,
@@ -10,6 +10,7 @@ import {
   deleteSchedule,
   createCoach,
 } from "./actions";
+import { saveDayPlan } from "./wodActions";
 
 type Schedule = {
   id: string;
@@ -26,7 +27,112 @@ type Schedule = {
 };
 
 type Coach = { id: string; full_name: string; specialty: string | null };
-type Props = { schedules: Schedule[]; coaches: Coach[] };
+type Props = { schedules: Schedule[]; coaches: Coach[]; wodByDate: Record<string, string> };
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+function dateStrOf(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// Estilos para que el contenido enriquecido (listas, títulos) se vea bien
+const WOD_CONTENT_CLS =
+  "[&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_h3]:text-base [&_h3]:font-bold [&_h3]:mt-2 [&_h3]:mb-1 leading-relaxed";
+
+const TOOLBAR: { cmd: string; arg?: string; label: string; title: string; style?: string }[] = [
+  { cmd: "bold", label: "B", title: "Negrita", style: "font-bold" },
+  { cmd: "italic", label: "i", title: "Cursiva", style: "italic" },
+  { cmd: "underline", label: "U", title: "Subrayado", style: "underline" },
+  { cmd: "formatBlock", arg: "H3", label: "T", title: "Título" },
+  { cmd: "insertUnorderedList", label: "•", title: "Lista con viñetas" },
+  { cmd: "insertOrderedList", label: "1.", title: "Lista numerada" },
+  { cmd: "justifyLeft", label: "⯇", title: "Alinear izquierda" },
+  { cmd: "justifyCenter", label: "≣", title: "Centrar" },
+  { cmd: "justifyRight", label: "⯈", title: "Alinear derecha" },
+  { cmd: "removeFormat", label: "⌫", title: "Quitar formato" },
+];
+
+// ─── Editor del WOD del día (texto enriquecido) ───────────────────────────────
+function DayWodEditor({
+  dateStr,
+  dateLabel,
+  content,
+}: {
+  dateStr: string;
+  dateLabel: string;
+  content?: string;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [pending, startTransition] = useTransition();
+
+  function exec(cmd: string, arg?: string) {
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, arg);
+  }
+
+  function save() {
+    const el = editorRef.current;
+    const isEmpty = !el || (el.textContent ?? "").trim() === "";
+    const html = isEmpty ? "" : el!.innerHTML;
+    startTransition(async () => {
+      try {
+        await saveDayPlan(dateStr, html);
+        toast.success("Planificación guardada");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      }
+    });
+  }
+
+  return (
+    <div className="bg-white/5 border border-line rounded-xl p-5">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <p className="font-semibold">Planificación del día (WOD)</p>
+          <p className="text-fg/35 text-xs mt-0.5 capitalize">{dateLabel}</p>
+        </div>
+        <button
+          onClick={save}
+          disabled={pending}
+          className="bg-accent hover:bg-accent/80 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {pending ? "Guardando..." : "Guardar WOD"}
+        </button>
+      </div>
+
+      {/* Barra de formato */}
+      <div className="flex flex-wrap gap-1 mb-2 border border-line rounded-lg p-1 bg-white/5">
+        {TOOLBAR.map((b, i) => (
+          <button
+            key={i}
+            type="button"
+            title={b.title}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              exec(b.cmd, b.arg);
+            }}
+            className="min-w-8 h-8 px-2 flex items-center justify-center text-sm text-fg/70 hover:text-fg hover:bg-white/10 rounded transition-colors"
+          >
+            <span className={b.style ?? ""}>{b.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Cuadro de texto */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        dangerouslySetInnerHTML={{ __html: content ?? "" }}
+        className={`min-h-44 w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2.5 text-sm text-fg outline-none focus:border-accent transition-colors ${WOD_CONTENT_CLS}`}
+      />
+      <p className="text-fg/25 text-xs mt-2">
+        Escribe el WOD con formato (negrita, listas, alineación…) y pulsa “Guardar WOD”.
+      </p>
+    </div>
+  );
+}
 
 const DAYS_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MONTH_NAMES = [
@@ -543,13 +649,18 @@ type Modal =
   | { type: "coach" }
   | null;
 
-export default function ClasesClient({ schedules, coaches }: Props) {
+export default function ClasesClient({ schedules, coaches, wodByDate }: Props) {
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   });
   const [modal, setModal] = useState<Modal>(null);
+
+  const selectedDateStr = dateStrOf(selectedDate);
+  const selectedDateLabel = `${DAYS_FULL[selectedDate.getDay()]}, ${selectedDate.getDate()} de ${MONTH_NAMES[
+    selectedDate.getMonth()
+  ].toLowerCase()}`;
 
   // Weekdays that have at least one active schedule
   const scheduledWeekdays = useMemo(
@@ -598,6 +709,16 @@ export default function ClasesClient({ schedules, coaches }: Props) {
           coaches={coaches}
           onEdit={(s) => setModal({ type: "class", schedule: s })}
           onNew={() => setModal({ type: "class", defaultDow: selectedDow })}
+        />
+      </div>
+
+      {/* Editor del WOD del día seleccionado */}
+      <div className="mt-4">
+        <DayWodEditor
+          key={selectedDateStr}
+          dateStr={selectedDateStr}
+          dateLabel={selectedDateLabel}
+          content={wodByDate[selectedDateStr]}
         />
       </div>
 

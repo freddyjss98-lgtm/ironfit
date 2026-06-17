@@ -31,13 +31,6 @@ type MyBooking = {
 
 type Slot = { start: string; end: string };
 
-type Wod = {
-  warmup: string | null;
-  strength: string | null;
-  wod: string | null;
-  accessories: string | null;
-};
-
 type Props = {
   schedules: Schedule[];
   myBookings: MyBooking[];
@@ -45,37 +38,24 @@ type Props = {
   memberId: string | null;
   hasActiveMembership: boolean;
   today: string;
-  wodByDate: Record<string, Wod>;
+  wodByDate: Record<string, string>;
 };
 
-const WOD_SECTIONS: { key: keyof Wod; label: string; emoji: string; color: string; border: string; bg: string }[] = [
-  { key: "warmup", label: "Calentamiento", emoji: "🔥", color: "text-blue-300", border: "border-blue-500/25", bg: "bg-blue-500/10" },
-  { key: "strength", label: "Fuerza", emoji: "💪", color: "text-red-300", border: "border-red-500/25", bg: "bg-red-500/10" },
-  { key: "wod", label: "WOD", emoji: "⚡", color: "text-amber-300", border: "border-amber-500/25", bg: "bg-amber-500/10" },
-  { key: "accessories", label: "Accesorios", emoji: "🏋️", color: "text-emerald-300", border: "border-emerald-500/25", bg: "bg-emerald-500/10" },
-];
+const WOD_CONTENT_CLS =
+  "[&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_h3]:text-base [&_h3]:font-bold [&_h3]:mt-1 leading-relaxed";
 
-function DayWod({ wod }: { wod: Wod | undefined }) {
-  const filled = wod ? WOD_SECTIONS.filter((s) => (wod[s.key] ?? "").trim() !== "") : [];
-  if (filled.length === 0) return null;
+function DayWod({ content }: { content: string | undefined }) {
+  if (!content || content.trim() === "") return null;
 
   return (
     <div className="bg-white/5 border border-accent/30 rounded-2xl p-4">
       <p className="text-accent text-xs uppercase tracking-widest font-semibold mb-3">
         🗓️ Planificación del día
       </p>
-      <div className="space-y-2.5">
-        {filled.map((s) => (
-          <div key={s.key} className={`rounded-xl border ${s.border} ${s.bg} px-3 py-2`}>
-            <p className={`text-xs font-bold uppercase tracking-wider ${s.color} flex items-center gap-1.5 mb-1`}>
-              <span>{s.emoji}</span> {s.label}
-            </p>
-            <p className="text-sm text-fg/80 whitespace-pre-line leading-relaxed">
-              {(wod![s.key] ?? "").trim()}
-            </p>
-          </div>
-        ))}
-      </div>
+      <div
+        className={`text-sm text-fg/80 ${WOD_CONTENT_CLS}`}
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
     </div>
   );
 }
@@ -226,7 +206,7 @@ export default function PortalClasesClient({
       </div>
 
       {/* Planificación del día (encima de las clases) */}
-      <DayWod wod={wodByDate[selectedDate]} />
+      <DayWod content={wodByDate[selectedDate]} />
 
       {/* Classes */}
       {daySchedules.length === 0 ? (

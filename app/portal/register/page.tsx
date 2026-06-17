@@ -94,6 +94,40 @@ export default async function RegisterPage({ searchParams }: Props) {
             </div>
 
             <div className="flex flex-col gap-1.5">
+              <label className="text-white/60 text-sm" htmlFor="birthday">
+                Fecha de nacimiento *
+              </label>
+              <input
+                id="birthday"
+                name="birthday"
+                type="date"
+                required
+                autoComplete="bday"
+                className="bg-white/5 border border-white/15 text-white rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#e84b1f] transition-colors [color-scheme:dark]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-white/60 text-sm" htmlFor="gender">
+                Género *
+              </label>
+              <select
+                id="gender"
+                name="gender"
+                required
+                defaultValue=""
+                className="bg-white/5 border border-white/15 text-white rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#e84b1f] transition-colors"
+              >
+                <option value="" disabled>
+                  Selecciona...
+                </option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
+                <option value="other">Otro</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <label className="text-white/60 text-sm" htmlFor="email">
                 Correo electrónico *
               </label>

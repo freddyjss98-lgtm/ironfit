@@ -127,13 +127,7 @@ export default async function PortalClasesPage() {
   };
 
   // ── Planificación (WOD) del programa activo para el rango visible ──────────
-  type Wod = {
-    warmup: string | null;
-    strength: string | null;
-    wod: string | null;
-    accessories: string | null;
-  };
-  const wodByDate: Record<string, Wod> = {};
+  const wodByDate: Record<string, string> = {};
 
   const { data: types } = await supabase
     .from("program_types")
@@ -158,18 +152,14 @@ export default async function PortalClasesPage() {
     if (weekIds.length > 0) {
       const { data: workouts } = await supabase
         .from("daily_workouts")
-        .select("program_id, day_of_week, warmup, strength, wod, accessories")
+        .select("program_id, day_of_week, content")
         .in("program_id", weekIds);
       for (const w of workouts ?? []) {
         const ws = weekStartById[w.program_id as string];
         if (!ws) continue;
         const date = dayDateISO(ws, w.day_of_week as number);
-        wodByDate[date] = {
-          warmup: (w.warmup ?? null) as string | null,
-          strength: (w.strength ?? null) as string | null,
-          wod: (w.wod ?? null) as string | null,
-          accessories: (w.accessories ?? null) as string | null,
-        };
+        const c = (w.content ?? "") as string;
+        if (c) wodByDate[date] = c;
       }
     }
   }

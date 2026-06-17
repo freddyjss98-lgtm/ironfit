@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 function revalidate() {
-  revalidatePath("/admin/planificaciones");
+  revalidatePath("/admin/clases");
 }
 
 // ── Program types ─────────────────────────────────────────────────────────────

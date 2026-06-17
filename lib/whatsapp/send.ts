@@ -50,6 +50,85 @@ export type TemplateMessage = {
 };
 
 /**
+ * POST genérico a la Cloud API de Meta. Centraliza el manejo de token, URL,
+ * errores y red para que tanto plantillas como texto libre lo reutilicen.
+ * Solo se llama en modo "meta" (con credenciales presentes).
+ */
+async function postGraphMessage(
+  payload: Record<string, unknown>
+): Promise<SendResult> {
+  const phoneId = process.env.WHATSAPP_PHONE_ID!;
+  const token = process.env.WHATSAPP_TOKEN!;
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const message =
+        json?.error?.message ?? `HTTP ${res.status} al enviar WhatsApp`;
+      return { ok: false, mode: "meta", provider: "meta", error: message };
+    }
+
+    return {
+      ok: true,
+      mode: "meta",
+      provider: "meta",
+      providerMessageId: json?.messages?.[0]?.id,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      mode: "meta",
+      provider: "meta",
+      error: err instanceof Error ? err.message : "Error de red",
+    };
+  }
+}
+
+/**
+ * Envía un mensaje de TEXTO libre (no plantilla).
+ *
+ * Solo válido dentro de la ventana de servicio de 24h (cuando el socio escribió
+ * primero). El bot conversacional siempre responde a un mensaje entrante, así
+ * que la ventana está abierta. Fuera de esa ventana, Meta exige plantilla.
+ */
+export async function sendWhatsappText(params: {
+  to: string;
+  body: string;
+}): Promise<SendResult> {
+  const mode = getWhatsappMode();
+  const to = normalizePhoneEC(params.to);
+
+  if (!to) {
+    return { ok: false, mode, provider: mode, error: "Teléfono inválido" };
+  }
+
+  if (mode === "dry_run") {
+    console.log(
+      `[whatsapp:dry_run:text] → ${to}: ${params.body.replace(/\n/g, " ⏎ ")}`
+    );
+    return { ok: true, mode, provider: "dry_run" };
+  }
+
+  return postGraphMessage({
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { preview_url: false, body: params.body },
+  });
+}
+
+/**
  * Envía un recordatorio por WhatsApp.
  *
  * @param to            Teléfono del destinatario (cualquier formato; se normaliza).
@@ -77,11 +156,7 @@ export async function sendWhatsapp(params: {
   }
 
   // ── Modo real (Meta Cloud API) ───────────────────────────────────────────────
-  const phoneId = process.env.WHATSAPP_PHONE_ID!;
-  const token = process.env.WHATSAPP_TOKEN!;
-  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`;
-
-  const body = {
+  return postGraphMessage({
     messaging_product: "whatsapp",
     to,
     type: "template",
@@ -98,38 +173,5 @@ export async function sendWhatsapp(params: {
         },
       ],
     },
-  };
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const message =
-        json?.error?.message ?? `HTTP ${res.status} al enviar WhatsApp`;
-      return { ok: false, mode, provider: "meta", error: message };
-    }
-
-    return {
-      ok: true,
-      mode,
-      provider: "meta",
-      providerMessageId: json?.messages?.[0]?.id,
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      mode,
-      provider: "meta",
-      error: err instanceof Error ? err.message : "Error de red",
-    };
-  }
+  });
 }
