@@ -10,8 +10,13 @@ export default async function VentasPage() {
     .toISOString()
     .split("T")[0];
 
-  const [{ data: salesRaw }, { data: dailyRows }, { data: members }, { data: products }] =
-    await Promise.all([
+  const [
+    { data: salesRaw },
+    { data: dailyRows },
+    { data: members },
+    { data: products },
+    { data: plans },
+  ] = await Promise.all([
       // All sales (client handles pagination + filtering)
       supabase
         .from("sales")
@@ -40,6 +45,12 @@ export default async function VentasPage() {
         .eq("active", true)
         .gt("stock", 0)
         .order("name"),
+
+      supabase
+        .from("membership_plans")
+        .select("id, name, price, duration_days")
+        .eq("active", true)
+        .order("sort_order"),
     ]);
 
   // Flatten sales
@@ -90,6 +101,7 @@ export default async function VentasPage() {
         monthly={monthly}
         members={members ?? []}
         products={products ?? []}
+        plans={plans ?? []}
       />
     </div>
   );

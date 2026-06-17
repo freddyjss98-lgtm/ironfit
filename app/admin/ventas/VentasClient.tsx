@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { createSale, createProductSale } from "./actions";
+import { createSale, createCounterSale } from "./actions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -35,13 +35,16 @@ type MonthlySummary = {
 
 type Member = { id: string; full_name: string };
 type Product = { id: string; name: string; price: number; stock: number };
+type Plan = { id: string; name: string; price: number; duration_days: number };
 
 type LineItem = {
   key: string;
-  productId: string;
+  kind: "product" | "plan";
+  refId: string;
   name: string;
   unitPrice: number;
   quantity: number;
+  durationDays?: number;
 };
 
 type Props = {
@@ -50,6 +53,7 @@ type Props = {
   monthly: MonthlySummary;
   members: Member[];
   products: Product[];
+  plans: Plan[];
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -157,14 +161,15 @@ function SummaryPanel({
 function GenerarVentaForm({
   members,
   products,
+  plans,
   onClose,
 }: {
   members: Member[];
   products: Product[];
+  plans: Plan[];
   onClose: () => void;
 }) {
   const [memberId, setMemberId] = useState("");
-  const [memberSearch, setMemberSearch] = useState("");
   const [items, setItems] = useState<LineItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState("transfer");
   const [manualTotal, setManualTotal] = useState("");
@@ -173,19 +178,33 @@ function GenerarVentaForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const filteredMembers = memberSearch
-    ? members.filter((m) => m.full_name.toLowerCase().includes(memberSearch.toLowerCase()))
-    : members;
-
   const itemsTotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const total = items.length > 0 ? itemsTotal : parseFloat(manualTotal) || 0;
+  const hasPlan = items.some((i) => i.kind === "plan");
 
-  function addItem() {
+  function addProduct() {
     if (!products.length) return;
     const p = products[0];
     setItems((prev) => [
       ...prev,
-      { key: crypto.randomUUID(), productId: p.id, name: p.name, unitPrice: p.price, quantity: 1 },
+      { key: crypto.randomUUID(), kind: "product", refId: p.id, name: p.name, unitPrice: p.price, quantity: 1 },
+    ]);
+  }
+
+  function addPlan() {
+    if (!plans.length) return;
+    const p = plans[0];
+    setItems((prev) => [
+      ...prev,
+      {
+        key: crypto.randomUUID(),
+        kind: "plan",
+        refId: p.id,
+        name: p.name,
+        unitPrice: p.price,
+        quantity: 1,
+        durationDays: p.duration_days,
+      },
     ]);
   }
 
@@ -197,7 +216,19 @@ function GenerarVentaForm({
     const p = products.find((p) => p.id === productId);
     if (!p) return;
     setItems((prev) =>
-      prev.map((i) => (i.key === key ? { ...i, productId: p.id, name: p.name, unitPrice: p.price } : i))
+      prev.map((i) => (i.key === key ? { ...i, refId: p.id, name: p.name, unitPrice: p.price } : i))
+    );
+  }
+
+  function changePlan(key: string, planId: string) {
+    const p = plans.find((p) => p.id === planId);
+    if (!p) return;
+    setItems((prev) =>
+      prev.map((i) =>
+        i.key === key
+          ? { ...i, refId: p.id, name: p.name, unitPrice: p.price, durationDays: p.duration_days }
+          : i
+      )
     );
   }
 
@@ -206,23 +237,25 @@ function GenerarVentaForm({
   }
 
   function handleSubmit() {
-    if (total <= 0) { setError("Ingresa un monto o agrega productos"); return; }
+    if (total <= 0) { setError("Ingresa un monto o agrega productos/membresías"); return; }
+    if (hasPlan && !memberId) { setError("Selecciona un cliente para vender una membresía"); return; }
     setError(null);
 
     startTransition(async () => {
       try {
         if (items.length > 0) {
-          await createProductSale({
+          await createCounterSale({
             memberId: memberId || null,
-            saleDate: new Date().toISOString().split("T")[0],
             paymentMethod,
             bankReference: bankReference || null,
             notes: notes || null,
             items: items.map((i) => ({
-              productId: i.productId,
+              type: i.kind,
+              refId: i.refId,
               name: i.name,
               quantity: i.quantity,
               unitPrice: i.unitPrice,
+              durationDays: i.durationDays,
             })),
           });
         } else {
@@ -266,48 +299,84 @@ function GenerarVentaForm({
         </select>
       </div>
 
-      {/* Producto(s) */}
+      {/* Productos y membresías */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <label className="text-fg/50 text-xs uppercase tracking-wider">Productos</label>
-          <button
-            type="button"
-            onClick={addItem}
-            disabled={!products.length}
-            className="text-xs text-accent border border-accent/30 hover:border-accent px-2.5 py-1 rounded transition-colors disabled:opacity-30"
-          >
-            + Agregar
-          </button>
+          <label className="text-fg/50 text-xs uppercase tracking-wider">Productos y membresías</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={addProduct}
+              disabled={!products.length}
+              className="text-xs text-accent border border-accent/30 hover:border-accent px-2.5 py-1 rounded transition-colors disabled:opacity-30"
+            >
+              + Producto
+            </button>
+            <button
+              type="button"
+              onClick={addPlan}
+              disabled={!plans.length}
+              className="text-xs text-accent border border-accent/30 hover:border-accent px-2.5 py-1 rounded transition-colors disabled:opacity-30"
+            >
+              + Membresía
+            </button>
+          </div>
         </div>
         {items.length === 0 && (
           <p className="text-fg/30 text-xs text-center py-3 border border-dashed border-line rounded-lg">
-            Sin productos — o ingresa monto manual abajo
+            Sin ítems — o ingresa monto manual abajo
           </p>
         )}
         {items.map((item) => (
           <div key={item.key} className="flex gap-2 items-center">
-            <select
-              value={item.productId}
-              onChange={(e) => changeProduct(item.key, e.target.value)}
-              className={`${inputCls} flex-1`}
-            >
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} — ${p.price}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min="1"
-              value={item.quantity}
-              onChange={(e) => changeQty(item.key, parseInt(e.target.value) || 1)}
-              className="w-14 bg-white/5 border border-white/15 text-fg rounded-lg px-2 py-2 text-sm text-center outline-none focus:border-accent"
-            />
+            {item.kind === "product" ? (
+              <>
+                <select
+                  value={item.refId}
+                  onChange={(e) => changeProduct(item.key, e.target.value)}
+                  className={`${inputCls} flex-1`}
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} — ${p.price}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  value={item.quantity}
+                  onChange={(e) => changeQty(item.key, parseInt(e.target.value) || 1)}
+                  className="w-14 bg-white/5 border border-white/15 text-fg rounded-lg px-2 py-2 text-sm text-center outline-none focus:border-accent"
+                />
+              </>
+            ) : (
+              <>
+                <select
+                  value={item.refId}
+                  onChange={(e) => changePlan(item.key, e.target.value)}
+                  className={`${inputCls} flex-1`}
+                >
+                  {plans.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — ${p.price} ({p.duration_days}d)
+                    </option>
+                  ))}
+                </select>
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider bg-accent/15 text-accent px-2 py-1.5 rounded">
+                  Membresía
+                </span>
+              </>
+            )}
             <span className="text-sm text-fg/60 w-16 text-right tabular-nums shrink-0">
               {fmt(item.quantity * item.unitPrice)}
             </span>
             <button onClick={() => removeItem(item.key)} className="text-fg/30 hover:text-red-400 text-xl">×</button>
           </div>
         ))}
+        {hasPlan && !memberId && (
+          <p className="text-amber-400 text-xs">
+            ⚠ Selecciona un cliente arriba para vender una membresía.
+          </p>
+        )}
       </div>
 
       {/* Monto manual (si no hay items) */}
@@ -420,7 +489,7 @@ function DetallesModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function VentasClient({ sales, today, monthly, members, products }: Props) {
+export default function VentasClient({ sales, today, monthly, members, products, plans }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [detailSale, setDetailSale] = useState<Sale | null>(null);
 
@@ -725,6 +794,7 @@ export default function VentasClient({ sales, today, monthly, members, products 
             <GenerarVentaForm
               members={members}
               products={products}
+              plans={plans}
               onClose={() => setShowForm(false)}
             />
           </div>
