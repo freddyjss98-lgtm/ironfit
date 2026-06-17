@@ -4,7 +4,7 @@ import CoachesClient from "./CoachesClient";
 export default async function CoachesPage() {
   const supabase = await createClient();
 
-  const [coachesRes, schedulesRes] = await Promise.all([
+  const [coachesRes, schedulesRes, membersRes] = await Promise.all([
     supabase
       .from("coaches")
       .select("id, full_name, phone, email, specialty, active")
@@ -14,6 +14,12 @@ export default async function CoachesPage() {
       .from("class_schedules")
       .select("id, coach_id, name, day_of_week, start_time")
       .eq("active", true),
+    supabase
+      .from("members")
+      .select("id, full_name, phone, email, user_id")
+      .is("deleted_at", null)
+      .not("user_id", "is", null)
+      .order("full_name"),
   ]);
 
   // Class count and names per coach
@@ -37,6 +43,14 @@ export default async function CoachesPage() {
     class_names: classNamesMap[c.id] ?? [],
   }));
 
+  const eligibleMembers = (membersRes.data ?? []).map((m) => ({
+    id: m.id,
+    full_name: m.full_name as string,
+    phone: m.phone as string | null,
+    email: m.email as string | null,
+    user_id: m.user_id as string,
+  }));
+
   return (
     <div className="space-y-5">
       <div>
@@ -45,7 +59,7 @@ export default async function CoachesPage() {
           {coaches.filter((c) => c.active).length} activos · {coaches.length} total
         </p>
       </div>
-      <CoachesClient coaches={coaches} />
+      <CoachesClient coaches={coaches} eligibleMembers={eligibleMembers} />
     </div>
   );
 }
