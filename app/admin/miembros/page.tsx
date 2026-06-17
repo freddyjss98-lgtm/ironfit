@@ -12,7 +12,7 @@ export default async function MiembrosPage() {
     : { data: null };
   const role: "admin" | "coach" = me?.role === "coach" ? "coach" : "admin";
 
-  const [{ data: members, error: membersError }, { data: plans }, { data: archived }] =
+  const [{ data: members, error: membersError }, { data: plans }, { data: archived }, { data: profiles }] =
     await Promise.all([
       supabase
         .from("vw_members_with_active_membership")
@@ -32,12 +32,26 @@ export default async function MiembrosPage() {
         .select("id, full_name, phone, photo_url, deleted_at")
         .not("deleted_at", "is", null)
         .order("deleted_at", { ascending: false }),
+
+      supabase
+        .from("profiles")
+        .select("id, role"),
     ]);
 
   if (membersError) {
     console.error("[MiembrosPage] Query error:", membersError);
     throw new Error(`Error al cargar miembros: ${membersError.message}`);
   }
+
+  // Map user_id → role for members that have portal access
+  const profileRoleMap = new Map<string, string>(
+    (profiles ?? []).map((p) => [p.id as string, p.role as string])
+  );
+
+  const membersWithRole = (members ?? []).map((m) => ({
+    ...m,
+    profile_role: m.user_id ? (profileRoleMap.get(m.user_id) ?? null) : null,
+  }));
 
   return (
     <div className="space-y-5">
@@ -47,7 +61,7 @@ export default async function MiembrosPage() {
       </div>
 
       <MembersClient
-        members={members ?? []}
+        members={membersWithRole}
         plans={plans ?? []}
         archived={archived ?? []}
         role={role}
