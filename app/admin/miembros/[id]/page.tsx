@@ -19,6 +19,15 @@ export default async function MemberDetailPage({
 
   if (!member) notFound();
 
+  // Rol del staff que mira la ficha (para ocultar info sensible a coaches)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: me } = user
+    ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const role: "admin" | "coach" = me?.role === "coach" ? "coach" : "admin";
+
   const [
     { data: memberships },
     { data: attendances },
@@ -87,6 +96,7 @@ export default async function MemberDetailPage({
         progress={progress ?? []}
         sales={sales ?? []}
         stats={stats ?? null}
+        role={role}
       />
     </div>
   );

@@ -1,6 +1,21 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Rutas del panel a las que SÍ puede entrar un coach. El resto se le bloquea.
+const COACH_ALLOWED = [
+  "/admin/asistencia",
+  "/admin/clases",
+  "/admin/reservas",
+  "/admin/planificaciones",
+  "/admin/miembros",
+  "/admin/eventos",
+  "/admin/cuenta",
+];
+
+function coachCanAccess(pathname: string): boolean {
+  return COACH_ALLOWED.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -38,18 +53,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // ¿El usuario tiene permiso de admin? (solo el staff tiene fila en profiles)
-  async function isAdmin(): Promise<boolean> {
-    if (!user) return false;
+  // Rol del staff: 'admin' | 'coach' | null (sin fila en profiles = socio)
+  let roleCache: string | null | undefined;
+  async function getRole(): Promise<string | null> {
+    if (roleCache !== undefined) return roleCache;
+    if (!user) {
+      roleCache = null;
+      return null;
+    }
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id")
+      .select("role")
       .eq("id", user.id)
       .maybeSingle();
-    return Boolean(profile);
+    const r: string | null = (profile?.role as string | undefined) ?? null;
+    roleCache = r;
+    return r;
   }
 
-  // ── ADMIN: requiere sesión + rol admin ────────────────────────────────────
+  // ── ADMIN: requiere sesión + rol staff (admin o coach) ─────────────────────
   if (pathname.startsWith("/admin")) {
     if (!user) {
       const url = request.nextUrl.clone();
@@ -57,10 +79,18 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
-    if (!(await isAdmin())) {
+    const role = await getRole();
+    if (role !== "admin" && role !== "coach") {
       // Socio autenticado → su portal
       const url = request.nextUrl.clone();
       url.pathname = "/portal";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    // Coach: solo sus secciones; el resto → Asistencia
+    if (role === "coach" && !coachCanAccess(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/asistencia";
       url.search = "";
       return NextResponse.redirect(url);
     }
@@ -92,8 +122,10 @@ export async function middleware(request: NextRequest) {
 
   // Ya logueado en el login → enrutar por rol
   if (pathname === "/portal/login" && user) {
+    const role = await getRole();
     const url = request.nextUrl.clone();
-    url.pathname = (await isAdmin()) ? "/admin" : "/portal";
+    url.pathname =
+      role === "admin" ? "/admin" : role === "coach" ? "/admin/asistencia" : "/portal";
     url.search = "";
     return NextResponse.redirect(url);
   }

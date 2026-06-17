@@ -44,7 +44,13 @@ const SECTION_TABS: { match: string[]; tabs: { href: string; label: string }[] }
   },
 ];
 
-export default function AdminShell({ children }: { children: ReactNode }) {
+export default function AdminShell({
+  children,
+  role = "admin",
+}: {
+  children: ReactNode;
+  role?: "admin" | "coach";
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -62,7 +68,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex bg-bg">
-      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <Sidebar open={open} onClose={() => setOpen(false)} role={role} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar title={title} onMenuClick={() => setOpen(true)} />

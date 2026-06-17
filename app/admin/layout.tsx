@@ -24,14 +24,16 @@ export default async function AdminLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("role")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) redirect("/portal");
 
+  const role = profile.role === "coach" ? "coach" : "admin";
+
   return (
     <>
-      <AdminShell>{children}</AdminShell>
+      <AdminShell role={role}>{children}</AdminShell>
       <Toaster
         theme="dark"
         position="top-right"

@@ -41,7 +41,7 @@ type ArchivedMember = {
   deleted_at: string;
 };
 
-type Props = { members: Member[]; plans: Plan[]; archived: ArchivedMember[] };
+type Props = { members: Member[]; plans: Plan[]; archived: ArchivedMember[]; role?: "admin" | "coach" };
 
 type Modal = { type: "create" } | { type: "edit"; member: Member } | null;
 
@@ -613,7 +613,8 @@ function ArchivedPanel({ archived, onClose }: { archived: ArchivedMember[]; onCl
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function MembersClient({ members, plans, archived }: Props) {
+export default function MembersClient({ members, plans, archived, role = "admin" }: Props) {
+  const isCoach = role === "coach";
   const [modal, setModal] = useState<Modal>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [assign, setAssign] = useState<Member | null>(null);
@@ -705,30 +706,36 @@ export default function MembersClient({ members, plans, archived }: Props) {
               ✕ Limpiar
             </button>
           )}
-          <button
-            onClick={() => setModal({ type: "create" })}
-            className="px-3 py-2 bg-accent hover:bg-accent/80 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
-          >
-            + Nuevo
-          </button>
-          <button
-            onClick={() => setInviteOpen(true)}
-            className="px-3 py-2 bg-[#25d366] hover:bg-[#1fb855] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
-          >
-            <WhatsAppIcon /> Invitar
-          </button>
+          {!isCoach && (
+            <button
+              onClick={() => setModal({ type: "create" })}
+              className="px-3 py-2 bg-accent hover:bg-accent/80 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+            >
+              + Nuevo
+            </button>
+          )}
+          {!isCoach && (
+            <button
+              onClick={() => setInviteOpen(true)}
+              className="px-3 py-2 bg-[#25d366] hover:bg-[#1fb855] text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <WhatsAppIcon /> Invitar
+            </button>
+          )}
           <button
             onClick={() => downloadCSV(filtered, "usuarios.csv")}
             className="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
           >
             ↓ Excel
           </button>
-          <button
-            onClick={() => setShowArchived(true)}
-            className="px-3 py-2 border border-line text-fg/60 hover:text-fg text-xs rounded-lg transition-colors flex items-center gap-1.5"
-          >
-            🗄 Archivados{archived.length > 0 ? ` (${archived.length})` : ""}
-          </button>
+          {!isCoach && (
+            <button
+              onClick={() => setShowArchived(true)}
+              className="px-3 py-2 border border-line text-fg/60 hover:text-fg text-xs rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              🗄 Archivados{archived.length > 0 ? ` (${archived.length})` : ""}
+            </button>
+          )}
           <span className="px-3 py-2 bg-accent text-white text-xs font-bold rounded-lg">
             Total: {total}
           </span>
@@ -783,7 +790,13 @@ export default function MembersClient({ members, plans, archived }: Props) {
                                 )}
                               </Link>
                               <div className="mt-1">
-                                <PlanInline member={m} onAssign={() => setAssign(m)} />
+                                {isCoach ? (
+                                  <span className="text-xs text-fg/50">
+                                    {m.current_plan_name ?? "Sin plan"}
+                                  </span>
+                                ) : (
+                                  <PlanInline member={m} onAssign={() => setAssign(m)} />
+                                )}
                               </div>
                             </div>
                           </div>
@@ -821,13 +834,15 @@ export default function MembersClient({ members, plans, archived }: Props) {
 
                         {/* Acciones */}
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => setArchiving(m)}
-                            title="Archivar usuario"
-                            className="text-fg/25 hover:text-red-400 transition-colors text-base leading-none p-1"
-                          >
-                            🗑
-                          </button>
+                          {!isCoach && (
+                            <button
+                              onClick={() => setArchiving(m)}
+                              title="Archivar usuario"
+                              className="text-fg/25 hover:text-red-400 transition-colors text-base leading-none p-1"
+                            >
+                              🗑
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

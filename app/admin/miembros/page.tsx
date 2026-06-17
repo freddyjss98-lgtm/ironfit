@@ -4,6 +4,14 @@ import MembersClient from "./MembersClient";
 export default async function MiembrosPage() {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: me } = user
+    ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const role: "admin" | "coach" = me?.role === "coach" ? "coach" : "admin";
+
   const [{ data: members, error: membersError }, { data: plans }, { data: archived }] =
     await Promise.all([
       supabase
@@ -42,6 +50,7 @@ export default async function MiembrosPage() {
         members={members ?? []}
         plans={plans ?? []}
         archived={archived ?? []}
+        role={role}
       />
     </div>
   );

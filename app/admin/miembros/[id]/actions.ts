@@ -1,7 +1,23 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+
+async function assertAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (me?.role !== "admin") throw new Error("No autorizado");
+  return { supabase, user };
+}
 
 // ── Edición completa del miembro (todos los campos) ───────────────────────────
 
@@ -33,13 +49,21 @@ export async function updateMemberFull(memberId: string, formData: FormData) {
 // ── Cambiar rol: promover a Coach ──────────────────────────────────────────────
 
 export async function promoteToCoach(memberId: string, data: {
+  user_id: string | null;
   full_name: string;
   specialty: string;
   phone: string;
   email: string | null;
 }) {
-  const supabase = await createClient();
+  const { supabase } = await assertAdmin();
 
+  if (!data.user_id) {
+    throw new Error(
+      "El miembro no tiene acceso al panel. Primero créale el acceso (usuario y contraseña) en la tarjeta 'Acceso al portal', luego promuévelo a coach."
+    );
+  }
+
+  // 1. Ficha de coach (para la lista de Coaches). Si ya existe, no es error.
   const { error } = await supabase.from("coaches").insert({
     full_name: data.full_name,
     specialty: data.specialty || "Entrenamiento funcional",
@@ -47,11 +71,18 @@ export async function promoteToCoach(memberId: string, data: {
     email: data.email,
     active: true,
   });
+  if (error && error.code !== "23505") throw new Error(error.message);
 
-  if (error) {
-    if (error.code === "23505") throw new Error("Ya existe un coach con ese nombre o datos");
-    throw new Error(error.message);
-  }
+  // 2. Login con rol coach. Se usa el service role porque la RLS de profiles
+  //    solo permite insertar el perfil propio; aquí creamos el de otro usuario.
+  const admin = createAdminClient();
+  const { error: pErr } = await admin.from("profiles").upsert({
+    id: data.user_id,
+    full_name: data.full_name,
+    email: data.email,
+    role: "coach",
+  });
+  if (pErr) throw new Error(pErr.message);
 
   revalidatePath(`/admin/miembros/${memberId}`);
   revalidatePath("/admin/coaches");
@@ -66,13 +97,15 @@ export async function promoteToAdmin(memberId: string, data: {
 }) {
   if (!data.user_id) {
     throw new Error(
-      "El miembro no tiene cuenta en el portal. Primero crea acceso al portal desde la pestaña Membresías."
+      "El miembro no tiene acceso al panel. Primero créale el acceso en la tarjeta 'Acceso al portal'."
     );
   }
 
-  const supabase = await createClient();
+  await assertAdmin();
 
-  const { error } = await supabase.from("profiles").upsert({
+  // Service role: la RLS de profiles solo permite el perfil propio.
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").upsert({
     id: data.user_id,
     full_name: data.full_name,
     email: data.email,

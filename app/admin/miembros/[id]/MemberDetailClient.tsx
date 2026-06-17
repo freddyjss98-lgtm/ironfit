@@ -95,6 +95,7 @@ type Props = {
   progress: Progress[];
   sales: Sale[];
   stats: Stats;
+  role?: "admin" | "coach";
 };
 
 const TABS = ["Resumen", "Asistencia", "Progreso", "Pagos", "Membresías"] as const;
@@ -234,6 +235,7 @@ function PromoteCoachModal({ member, onClose }: { member: Member; onClose: () =>
     startTransition(async () => {
       try {
         await promoteToCoach(member.id, {
+          user_id: member.user_id,
           full_name: member.full_name,
           specialty,
           phone: member.phone,
@@ -313,7 +315,12 @@ export default function MemberDetailClient({
   progress,
   sales,
   stats,
+  role = "admin",
 }: Props) {
+  const isCoach = role === "coach";
+  const visibleTabs = isCoach
+    ? TABS.filter((t) => t !== "Pagos" && t !== "Membresías")
+    : TABS;
   const [tab, setTab] = useState<Tab>("Resumen");
   const [editing, setEditing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -370,7 +377,7 @@ export default function MemberDetailClient({
                   ✏ Editar
                 </button>
 
-                <div className="relative">
+                <div className="relative" hidden={isCoach}>
                   <button
                     onClick={() => setShowRoleMenu((v) => !v)}
                     className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors flex items-center gap-1"
@@ -441,11 +448,11 @@ export default function MemberDetailClient({
       </div>
 
       {/* ACCESO AL PORTAL */}
-      <PortalAccessCard member={member} />
+      {!isCoach && <PortalAccessCard member={member} />}
 
       {/* TABS */}
       <div className="flex gap-1 border-b border-line overflow-x-auto">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}

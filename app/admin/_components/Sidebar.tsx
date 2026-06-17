@@ -4,17 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 
-type NavLink = { href: string; label: string; icon: string; match?: string[] };
+type NavLink = { href: string; label: string; icon: string; match?: string[]; coach?: boolean };
 
 const links: NavLink[] = [
   { href: "/admin", label: "Dashboard", icon: "▣" },
-  { href: "/admin/miembros", label: "Miembros", icon: "◉" },
-  { href: "/admin/asistencia", label: "Asistencia", icon: "→" },
+  { href: "/admin/miembros", label: "Miembros", icon: "◉", coach: true },
+  { href: "/admin/asistencia", label: "Asistencia", icon: "→", coach: true },
   {
     href: "/admin/clases",
     label: "Entrenamiento",
     icon: "◌",
     match: ["/admin/clases", "/admin/reservas", "/admin/planificaciones"],
+    coach: true,
   },
   {
     href: "/admin/membresias",
@@ -25,17 +26,19 @@ const links: NavLink[] = [
   { href: "/admin/recordatorios", label: "Recordatorios", icon: "◐" },
   { href: "/admin/productos", label: "Productos", icon: "▦" },
   { href: "/admin/coaches", label: "Coaches", icon: "◎" },
-  { href: "/admin/eventos", label: "Eventos", icon: "◆" },
-  { href: "/admin/cuenta", label: "Mi cuenta", icon: "◍" },
+  { href: "/admin/eventos", label: "Eventos", icon: "◆", coach: true },
+  { href: "/admin/cuenta", label: "Mi cuenta", icon: "◍", coach: true },
 ];
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  role?: "admin" | "coach";
 };
 
-export default function Sidebar({ open, onClose }: Props) {
+export default function Sidebar({ open, onClose, role = "admin" }: Props) {
   const pathname = usePathname();
+  const visibleLinks = role === "coach" ? links.filter((l) => l.coach) : links;
 
   return (
     <>
@@ -69,13 +72,15 @@ export default function Sidebar({ open, onClose }: Props) {
             />
             <div>
               <div className="t-mono-label text-fg-mute leading-none">Iron Fit</div>
-              <div className="font-display text-xl text-fg leading-none mt-1">Admin</div>
+              <div className="font-display text-xl text-fg leading-none mt-1">
+                {role === "coach" ? "Coach" : "Admin"}
+              </div>
             </div>
           </Link>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4">
-          {links.map((link) => {
+          {visibleLinks.map((link) => {
             const isActive = link.match
               ? link.match.some((m) => pathname === m || pathname.startsWith(m + "/"))
               : link.href === "/admin"
