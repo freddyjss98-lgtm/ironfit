@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import NewMembershipForm from "../membresias/NewMembershipForm";
 
 type Member = {
   id: string;
@@ -14,7 +15,9 @@ type Member = {
   days_since_visit: number | null;
 };
 
-type Props = { members: Member[] };
+type Plan = { id: string; name: string; price: number; duration_days: number; color: string };
+
+type Props = { members: Member[]; plans: Plan[] };
 
 const today = new Date();
 today.setHours(0, 0, 0, 0);
@@ -65,8 +68,9 @@ function inactiveMessage(name: string): string {
 
 const INACTIVE_DAYS = 10;
 
-export default function RecordatoriosClient({ members }: Props) {
+export default function RecordatoriosClient({ members, plans }: Props) {
   const [sent, setSent] = useState<Set<string>>(new Set());
+  const [activateMember, setActivateMember] = useState<Member | null>(null);
 
   const {
     urgent,
@@ -268,6 +272,7 @@ export default function RecordatoriosClient({ members }: Props) {
         members={expiredRecent}
         sent={sent}
         onSent={markSent}
+        onActivate={setActivateMember}
         getMessage={(m) => noMembershipMessage(m.full_name)}
         getMeta={(m) => {
           const days = Math.abs(daysUntil(m.current_end_date!));
@@ -282,9 +287,40 @@ export default function RecordatoriosClient({ members }: Props) {
         members={noMembership}
         sent={sent}
         onSent={markSent}
+        onActivate={setActivateMember}
         getMessage={(m) => noMembershipMessage(m.full_name)}
         getMeta={() => "Sin membresía"}
       />
+
+      {/* Modal: activar membresía (reutiliza el formulario de Membresías) */}
+      {activateMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111] border border-line rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-display text-lg uppercase tracking-tight">Activar membresía</h2>
+              <button
+                onClick={() => setActivateMember(null)}
+                className="text-fg/40 hover:text-fg text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-fg/40 text-xs mb-5">{activateMember.full_name}</p>
+            <NewMembershipForm
+              members={[
+                {
+                  id: activateMember.id,
+                  full_name: activateMember.full_name,
+                  phone: activateMember.phone,
+                },
+              ]}
+              plans={plans}
+              defaultMemberId={activateMember.id}
+              onClose={() => setActivateMember(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -315,6 +351,7 @@ function Section({
   onSent,
   getMessage,
   getMeta,
+  onActivate,
 }: {
   title: string;
   badge: string;
@@ -324,6 +361,7 @@ function Section({
   onSent: (id: string) => void;
   getMessage: (m: Member) => string;
   getMeta: (m: Member) => string;
+  onActivate?: (m: Member) => void;
 }) {
   if (members.length === 0) return null;
 
@@ -371,6 +409,14 @@ function Section({
 
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0">
+                {onActivate && (
+                  <button
+                    onClick={() => onActivate(m)}
+                    className="flex items-center gap-1.5 bg-accent/15 hover:bg-accent/25 text-accent text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    + Activar membresía
+                  </button>
+                )}
                 {alreadySent ? (
                   <span className="text-xs text-fg/30">Enviado ✓</span>
                 ) : (

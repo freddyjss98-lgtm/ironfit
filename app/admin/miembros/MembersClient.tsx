@@ -620,10 +620,14 @@ export default function MembersClient({ members, plans, archived }: Props) {
   const [archiving, setArchiving] = useState<Member | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(12);
 
+  const inactiveCount = members.filter((m) => m.status === "inactive").length;
+
   const filtered = members.filter((m) => {
+    if (statusFilter !== "all" && m.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -632,6 +636,11 @@ export default function MembersClient({ members, plans, archived }: Props) {
       (m.email ?? "").toLowerCase().includes(q)
     );
   });
+
+  function handleStatusFilter(v: "active" | "inactive" | "all") {
+    setStatusFilter(v);
+    setPage(0);
+  }
 
   const total = filtered.length;
   const pageCount = Math.ceil(total / rowsPerPage) || 1;
@@ -666,6 +675,26 @@ export default function MembersClient({ members, plans, archived }: Props) {
             placeholder="Buscar usuario por nombre o apellido..."
             className="w-full bg-white/5 border border-line text-fg text-sm rounded-lg px-3 py-2 outline-none focus:border-accent transition-colors placeholder:text-fg/30"
           />
+        </div>
+        {/* Filtro por estado */}
+        <div className="flex shrink-0 rounded-lg border border-line overflow-hidden text-xs">
+          {([
+            ["active", "Activos"],
+            ["inactive", inactiveCount > 0 ? `Inactivos (${inactiveCount})` : "Inactivos"],
+            ["all", "Todos"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => handleStatusFilter(value)}
+              className={`px-3 py-2 font-medium transition-colors ${
+                statusFilter === value
+                  ? "bg-accent text-white"
+                  : "text-fg/50 hover:text-fg hover:bg-white/5"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <div className="flex gap-2 shrink-0 flex-wrap">
           {search && (

@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { renewMembership, cancelMembership, updateMembership } from "./actions";
+import {
+  renewMembership,
+  cancelMembership,
+  updateMembership,
+  freezeMembership,
+  resumeMembership,
+} from "./actions";
 import NewMembershipForm from "./NewMembershipForm";
 
 const inputCls =
@@ -163,6 +169,7 @@ function EditMembershipModal({
 function MembresiaRow({ m, onEdit }: { m: Membership; onEdit: (m: Membership) => void }) {
   const [renewPending, startRenew] = useTransition();
   const [cancelPending, startCancel] = useTransition();
+  const [freezePending, startFreeze] = useTransition();
 
   return (
     <tr className="border-b border-line/50 last:border-0 hover:bg-white/[0.03] transition-colors">
@@ -237,6 +244,43 @@ function MembresiaRow({ m, onEdit }: { m: Membership; onEdit: (m: Membership) =>
           >
             {renewPending ? "..." : "Renovar"}
           </button>
+          {m.effective_status === "active" && (
+            <button
+              disabled={freezePending}
+              onClick={() =>
+                startFreeze(async () => {
+                  try {
+                    await freezeMembership(m.id);
+                    toast.success("Membresía congelada");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Error al congelar");
+                  }
+                })
+              }
+              className="text-xs text-blue-400 hover:text-blue-300 border border-blue-400/40 hover:border-blue-400 px-2.5 py-1 rounded transition-colors disabled:opacity-40"
+              title="Pausar la membresía (se reanuda extendiendo la fecha de fin)"
+            >
+              {freezePending ? "..." : "Congelar"}
+            </button>
+          )}
+          {m.effective_status === "frozen" && (
+            <button
+              disabled={freezePending}
+              onClick={() =>
+                startFreeze(async () => {
+                  try {
+                    await resumeMembership(m.id);
+                    toast.success("Membresía reanudada");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Error al reanudar");
+                  }
+                })
+              }
+              className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-400/40 hover:border-emerald-400 px-2.5 py-1 rounded transition-colors disabled:opacity-40"
+            >
+              {freezePending ? "..." : "Reanudar"}
+            </button>
+          )}
           {m.effective_status === "active" && (
             <button
               disabled={cancelPending}
@@ -412,9 +456,8 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
 
   const expired = memberships.filter((m) => m.effective_status === "expired");
   const active = memberships.filter((m) => m.effective_status === "active");
-  const suspended = memberships.filter(
-    (m) => m.effective_status === "suspended" || m.effective_status === "cancelled"
-  );
+  const frozen = memberships.filter((m) => m.effective_status === "frozen");
+  const cancelled = memberships.filter((m) => m.effective_status === "cancelled");
   // Por vencer: activas que vencen en los próximos 7 días (incluye hoy)
   const expiringSoon = active.filter(
     (m) => m.days_until_expiry >= 0 && m.days_until_expiry <= 7
@@ -456,12 +499,24 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
           csvFilename="membresias_activas.csv"
           onEdit={setEditing}
         />
-        <MembresiaSection
-          title="Lista de Membresías Suspendidas"
-          rows={suspended}
-          csvFilename="membresias_suspendidas.csv"
-          onEdit={setEditing}
-        />
+        {frozen.length > 0 && (
+          <div className="rounded-xl border border-blue-500/25 bg-blue-500/[0.04] p-4">
+            <MembresiaSection
+              title="❄ Congeladas (pausadas)"
+              rows={frozen}
+              csvFilename="membresias_congeladas.csv"
+              onEdit={setEditing}
+            />
+          </div>
+        )}
+        {cancelled.length > 0 && (
+          <MembresiaSection
+            title="Lista de Membresías Canceladas"
+            rows={cancelled}
+            csvFilename="membresias_canceladas.csv"
+            onEdit={setEditing}
+          />
+        )}
       </div>
 
       {/* Modal editar fechas */}

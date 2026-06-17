@@ -17,16 +17,23 @@ function KpiCard({
   sub,
   accent,
   warn,
+  href,
 }: {
   label: string;
   value: string;
   sub?: string;
   accent?: boolean;
   warn?: boolean;
+  href?: string;
 }) {
-  return (
-    <div className="bg-white/5 border border-line rounded-xl p-5 flex flex-col gap-2">
-      <p className="text-fg/40 text-xs uppercase tracking-widest">{label}</p>
+  const inner = (
+    <>
+      <div className="flex items-center justify-between">
+        <p className="text-fg/40 text-xs uppercase tracking-widest">{label}</p>
+        {href && (
+          <span className="text-fg/20 group-hover:text-accent transition-colors text-sm">→</span>
+        )}
+      </div>
       <p
         className={`font-display text-3xl tracking-tight ${
           accent ? "text-accent" : warn ? "text-amber-400" : "text-fg"
@@ -35,7 +42,22 @@ function KpiCard({
         {value}
       </p>
       {sub && <p className="text-fg/40 text-xs">{sub}</p>}
-    </div>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group bg-white/5 border border-line rounded-xl p-5 flex flex-col gap-2 hover:bg-white/[0.08] hover:border-accent/40 transition-colors"
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="bg-white/5 border border-line rounded-xl p-5 flex flex-col gap-2">{inner}</div>
   );
 }
 
@@ -82,22 +104,26 @@ export default async function DashboardPage() {
             value={fmt(stats.todayTotal)}
             sub={`${stats.todaySales} venta${stats.todaySales !== 1 ? "s" : ""}`}
             accent={stats.todayTotal > 0}
+            href="/admin/ventas"
           />
           <KpiCard
             label="Ingresos del mes"
             value={fmt(stats.monthTotal)}
             sub={`${stats.monthSales} transacciones`}
+            href="/admin/ventas"
           />
           <KpiCard
             label="Ticket promedio"
             value={fmt(stats.ticketPromedio)}
             sub="promedio por venta este mes"
+            href="/admin/ventas"
           />
           <KpiCard
             label="Check-ins hoy"
             value={String(stats.todayCheckIns)}
             sub="asistencias registradas"
             accent={stats.todayCheckIns > 0}
+            href="/admin/asistencia"
           />
         </div>
       </Section>
@@ -113,23 +139,27 @@ export default async function DashboardPage() {
                 ? `+${stats.newMembersThisMonth} nuevos este mes`
                 : "membresía vigente hoy"
             }
+            href="/admin/miembros"
           />
           <KpiCard
             label="Churn rate"
             value={`${stats.churnRate.toFixed(1)}%`}
             sub="tasa de abandono mensual"
             warn={stats.churnRate > 15}
+            href="/admin/recordatorios"
           />
           <KpiCard
             label="MRR estimado"
             value={fmt(stats.mrr)}
             sub="ingresos recurrentes mensuales"
+            href="/admin/membresias"
           />
           <KpiCard
             label="Por vencer (7 días)"
             value={String(stats.expiring7Days)}
             sub="membresías próximas a vencer"
             warn={stats.expiring7Days > 0}
+            href="/admin/recordatorios"
           />
         </div>
       </Section>

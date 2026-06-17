@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function RecordatoriosPage() {
   const supabase = await createClient();
 
-  const [membersRes, attendanceRes] = await Promise.all([
+  const [membersRes, attendanceRes, plansRes] = await Promise.all([
     supabase
       .from("vw_members_with_active_membership")
       .select(
@@ -15,6 +15,11 @@ export default async function RecordatoriosPage() {
       .eq("status", "active")
       .order("full_name"),
     supabase.from("vw_attendance_stats").select("member_id, last_visit"),
+    supabase
+      .from("membership_plans")
+      .select("id, name, price, duration_days, color")
+      .eq("active", true)
+      .order("sort_order"),
   ]);
 
   // Merge days-since-last-visit into each member (for inactivity detection)
@@ -42,7 +47,7 @@ export default async function RecordatoriosPage() {
         </p>
       </div>
 
-      <RecordatoriosClient members={members} />
+      <RecordatoriosClient members={members} plans={plansRes.data ?? []} />
     </div>
   );
 }

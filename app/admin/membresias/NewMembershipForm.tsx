@@ -10,13 +10,14 @@ type Props = {
   members: Member[];
   plans: Plan[];
   onClose: () => void;
+  defaultMemberId?: string;
 };
 
 const inputCls =
   "w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors";
 const labelCls = "text-fg/50 text-xs uppercase tracking-wider";
 
-export default function NewMembershipForm({ members, plans, onClose }: Props) {
+export default function NewMembershipForm({ members, plans, onClose, defaultMemberId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [selectedPlanId, setSelectedPlanId] = useState(plans[0]?.id ?? "");
@@ -58,8 +59,13 @@ export default function NewMembershipForm({ members, plans, onClose }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <label className={labelCls}>Atleta *</label>
-          <select name="member_id" required className={inputCls}>
-            <option value="">Seleccionar miembro...</option>
+          <select
+            name="member_id"
+            required
+            defaultValue={defaultMemberId ?? ""}
+            className={inputCls}
+          >
+            {!defaultMemberId && <option value="">Seleccionar miembro...</option>}
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.full_name} — {m.phone}

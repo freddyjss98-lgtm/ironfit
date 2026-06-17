@@ -146,6 +146,76 @@ export async function renewMembership(membershipId: string) {
   revalidatePath("/admin");
 }
 
+// ── Congelar / reanudar (pausa por viaje, lesión, etc.) ────────────────────────
+
+export async function freezeMembership(membershipId: string) {
+  const supabase = await createClient();
+
+  const { data: current, error: readError } = await supabase
+    .from("memberships")
+    .select("status")
+    .eq("id", membershipId)
+    .single();
+
+  if (readError || !current) throw new Error("Membresía no encontrada");
+  if (current.status !== "active") {
+    throw new Error("Solo se puede congelar una membresía activa");
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const { error } = await supabase
+    .from("memberships")
+    .update({ status: "frozen", frozen_at: today })
+    .eq("id", membershipId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/membresias");
+  revalidatePath("/admin/miembros");
+  revalidatePath("/admin");
+}
+
+export async function resumeMembership(membershipId: string) {
+  const supabase = await createClient();
+
+  const { data: current, error: readError } = await supabase
+    .from("memberships")
+    .select("status, end_date, frozen_at, frozen_days")
+    .eq("id", membershipId)
+    .single();
+
+  if (readError || !current) throw new Error("Membresía no encontrada");
+  if (current.status !== "frozen" || !current.frozen_at) {
+    throw new Error("La membresía no está congelada");
+  }
+
+  // Días que estuvo en pausa → se devuelven extendiendo la fecha de fin.
+  const frozenSince = new Date(current.frozen_at + "T00:00:00");
+  const daysFrozen = Math.max(
+    0,
+    Math.round((Date.now() - frozenSince.getTime()) / 86_400_000)
+  );
+
+  const newEnd = new Date(current.end_date + "T00:00:00");
+  newEnd.setDate(newEnd.getDate() + daysFrozen);
+
+  const { error } = await supabase
+    .from("memberships")
+    .update({
+      status: "active",
+      frozen_at: null,
+      frozen_days: (current.frozen_days ?? 0) + daysFrozen,
+      end_date: newEnd.toISOString().split("T")[0],
+    })
+    .eq("id", membershipId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/membresias");
+  revalidatePath("/admin/miembros");
+  revalidatePath("/admin");
+}
+
 export async function cancelMembership(membershipId: string) {
   const supabase = await createClient();
 
