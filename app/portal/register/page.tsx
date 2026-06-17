@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { registerMember } from "./actions";
+import PasswordField from "../_components/PasswordField";
 
 interface Props {
   searchParams: Promise<{ error?: string; confirm?: string }>;
@@ -146,14 +147,12 @@ export default async function RegisterPage({ searchParams }: Props) {
               <label className="text-white/60 text-sm" htmlFor="password">
                 Contraseña *
               </label>
-              <input
+              <PasswordField
                 id="password"
                 name="password"
-                type="password"
                 required
                 minLength={6}
                 autoComplete="new-password"
-                className="bg-white/5 border border-white/15 text-white rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#e84b1f] transition-colors"
                 placeholder="Mínimo 6 caracteres"
               />
             </div>

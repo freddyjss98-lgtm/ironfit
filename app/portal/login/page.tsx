@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { portalSignIn } from "./actions";
+import PasswordField from "../_components/PasswordField";
 
 interface Props {
   searchParams: Promise<{ error?: string; next?: string }>;
@@ -54,13 +55,11 @@ export default async function PortalLoginPage({ searchParams }: Props) {
               <label className="text-white/60 text-sm" htmlFor="password">
                 Contraseña
               </label>
-              <input
+              <PasswordField
                 id="password"
                 name="password"
-                type="password"
                 required
                 autoComplete="current-password"
-                className="bg-white/5 border border-white/15 text-white rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#e84b1f] transition-colors"
               />
             </div>
 
