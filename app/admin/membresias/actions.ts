@@ -46,12 +46,15 @@ export async function createMembership(formData: FormData) {
 
   if (mError || !membership) throw new Error(mError?.message ?? "Error al crear membresía");
 
+  // La venta se registra HOY (día del pago), no en la fecha de inicio de la membresía.
+  const saleDate = new Date().toISOString().split("T")[0];
+
   // Create sale record linked to this membership
   const { data: sale, error: sError } = await supabase
     .from("sales")
     .insert({
       member_id: memberId,
-      sale_date: startDate,
+      sale_date: saleDate,
       total: paidAmount,
       payment_method: paymentMethod,
       bank_reference: bankReference,
@@ -116,12 +119,14 @@ export async function renewMembership(membershipId: string) {
 
   if (mError || !membership) throw new Error(mError?.message ?? "Error al renovar");
 
-  // Sale record
+  // Sale record — la venta se registra HOY (día del pago), no en la fecha de
+  // inicio de la nueva membresía (que al renovar puede ser futura).
+  const saleDate = new Date().toISOString().split("T")[0];
   const { data: sale } = await supabase
     .from("sales")
     .insert({
       member_id: current.member_id,
-      sale_date: newStart,
+      sale_date: saleDate,
       total: plan.price,
       payment_method: "transfer",
       notes: `Renovación: ${plan.name}`,

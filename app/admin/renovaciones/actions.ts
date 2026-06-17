@@ -56,11 +56,14 @@ export async function approveRenewalRequest(requestId: string) {
     .single();
   if (mErr || !membership) throw new Error(mErr?.message ?? "Error al crear membresía");
 
+  // La venta se registra HOY (día del pago), no en la fecha de inicio de la
+  // membresía (que al renovar puede ser futura).
+  const saleDate = new Date().toISOString().split("T")[0];
   const { data: sale } = await supabase
     .from("sales")
     .insert({
       member_id: req.member_id,
-      sale_date: startDate,
+      sale_date: saleDate,
       total: req.amount,
       payment_method: req.payment_method,
       notes: `Renovación: ${plan.name}`,
