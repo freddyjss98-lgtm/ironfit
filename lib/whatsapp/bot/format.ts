@@ -35,6 +35,7 @@ export type Intent =
   | "membership"
   | "classes"
   | "wod"
+  | "book"
   | "handoff"
   | "menu"
   | "resume"
@@ -56,9 +57,10 @@ export function parseIntent(raw: string): Intent {
     return "membership";
   if (/^(2|clases?|horarios?)\b/.test(t)) return "classes";
   if (/^(3|rutina|wod|entreno|entrenamiento|workout)\b/.test(t)) return "wod";
-  if (/^(4|asesor|humano|persona|recepcion|hablar|ayuda)\b/.test(t))
+  if (/^(4|reservar|reserva|agendar|apartar|booking)\b/.test(t)) return "book";
+  if (/^(5|asesor|humano|persona|recepcion|hablar|ayuda)\b/.test(t))
     return "handoff";
-  if (/^(bot|reanudar|volver al bot|salir)\b/.test(t)) return "resume";
+  if (/^(bot|reanudar|volver al bot)\b/.test(t)) return "resume";
   if (/^(menu|inicio|hola|buenas|buenos dias|0|\?|hi|hey)\b/.test(t))
     return "menu";
 
@@ -67,6 +69,18 @@ export function parseIntent(raw: string): Intent {
 
 // ── Textos y formateadores ─────────────────────────────────────────────────────
 
+/**
+ * Pie de navegación que se agrega a las respuestas de datos para que la
+ * conversación no "muera": recuerda las opciones sin reimprimir todo el menú.
+ */
+export function navFooter(): string {
+  return (
+    "\n\n— — — — —\n" +
+    "¿Algo más? 👉 *1* Membresía · *2* Clases · *3* Rutina · *4* Reservar · *5* Asesor\n" +
+    "(o escribe *menú*)"
+  );
+}
+
 export function menuText(): string {
   return (
     "🏋️ *Iron Fit Club* — ¿En qué te ayudo?\n\n" +
@@ -74,7 +88,8 @@ export function menuText(): string {
     "1️⃣  Mi membresía (estado y vencimiento)\n" +
     "2️⃣  Clases de hoy\n" +
     "3️⃣  Rutina del día (WOD)\n" +
-    "4️⃣  Hablar con un asesor\n\n" +
+    "4️⃣  Reservar una clase\n" +
+    "5️⃣  Hablar con un asesor\n\n" +
     "Escribe *menú* en cualquier momento para volver aquí. 💪"
   );
 }
@@ -195,4 +210,65 @@ export function handoffText(firstName: string): string {
 
 export function resumeText(): string {
   return "Volviste al asistente automático 🤖\n\n" + menuText();
+}
+
+// ── Reservar clase (flujo de 2 pasos) ───────────────────────────────────────────
+
+/** Opción de clase ofrecida para reservar (snapshot guardado en la conversación). */
+export type BookingOption = {
+  n: number;
+  schedule_id: string;
+  name: string;
+  start_time: string; // "06:00:00"
+  end_time: string;
+  max_capacity: number;
+};
+
+export function noClassesToBookText(dayLabel: string): string {
+  const dia = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+  return `📅 Hoy (${dia}) no hay clases disponibles para reservar 😌`;
+}
+
+export function bookingPromptText(
+  options: BookingOption[],
+  dayLabel: string
+): string {
+  const dia = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+  const lines = options
+    .map((o) => `*${o.n})* ${formatTime(o.start_time)}  ${o.name}`)
+    .join("\n");
+  return (
+    `📅 *Reservar clase — ${dia}*\n\n` +
+    `Responde con el *número* de la clase que quieres reservar:\n${lines}\n\n` +
+    `(o escribe *menú* para cancelar)`
+  );
+}
+
+export function bookingInvalidText(): string {
+  return (
+    "No reconocí ese número 🤔. Responde con el *número* de una clase de la " +
+    "lista, o escribe *menú* para cancelar."
+  );
+}
+
+export function bookingConfirmedText(o: BookingOption): string {
+  return (
+    `✅ ¡Listo! Reservaste *${o.name}* hoy a las *${formatTime(o.start_time)}*. ` +
+    `¡Te esperamos! 💪🔥`
+  );
+}
+
+export function bookingAlreadyText(o: BookingOption): string {
+  return `Ya tenías reservada *${o.name}* a las *${formatTime(o.start_time)}* para hoy ✅`;
+}
+
+export function bookingFullText(o: BookingOption): string {
+  return (
+    `😕 La clase *${o.name}* de las *${formatTime(o.start_time)}* ya llegó a su ` +
+    `cupo máximo. Elige otra de la lista o escribe *menú*.`
+  );
+}
+
+export function bookingCancelledText(): string {
+  return "Reserva cancelada 👍\n\n" + menuText();
 }
