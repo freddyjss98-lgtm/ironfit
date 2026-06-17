@@ -90,6 +90,20 @@ export async function promoteToCoach(memberId: string, data: {
 
 // ── Cambiar rol: promover a Admin ──────────────────────────────────────────────
 
+// ── Quitar permisos: vuelve a ser usuario del portal sin rol de staff ──────────
+
+export async function demoteToMember(memberId: string, userId: string) {
+  await assertAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").delete().eq("id", userId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/admin/miembros/${memberId}`);
+  revalidatePath("/admin/miembros");
+  revalidatePath("/admin/coaches");
+}
+
+// ── Cambiar rol: promover a Admin ──────────────────────────────────────────────
+
 export async function promoteToAdmin(memberId: string, data: {
   user_id: string | null;
   full_name: string;

@@ -11,6 +11,7 @@ import {
   updateMemberFull,
   promoteToCoach,
   promoteToAdmin,
+  demoteToMember,
   uploadMemberPhoto,
   uploadProgressPhoto,
 } from "./actions";
@@ -96,6 +97,7 @@ type Props = {
   sales: Sale[];
   stats: Stats;
   role?: "admin" | "coach";
+  memberRole?: string | null;
 };
 
 const TABS = ["Resumen", "Asistencia", "Progreso", "Pagos", "Membresías"] as const;
@@ -316,6 +318,7 @@ export default function MemberDetailClient({
   sales,
   stats,
   role = "admin",
+  memberRole = null,
 }: Props) {
   const isCoach = role === "coach";
   const visibleTabs = isCoach
@@ -327,6 +330,7 @@ export default function MemberDetailClient({
   const [showCoachModal, setShowCoachModal] = useState(false);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [promotingAdmin, startPromoteAdmin] = useTransition();
+  const [demoting, startDemote] = useTransition();
 
   const activeMembership = memberships.find(
     (m) => m.effective_status === "active"
@@ -382,38 +386,67 @@ export default function MemberDetailClient({
                     onClick={() => setShowRoleMenu((v) => !v)}
                     className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors flex items-center gap-1"
                   >
-                    Cambiar rol ▾
+                    {memberRole === "coach" ? "Coach ▾" : memberRole === "admin" ? "Admin ▾" : "Cambiar rol ▾"}
                   </button>
                   {showRoleMenu && (
-                    <div className="absolute right-0 top-full mt-1 bg-bg-2 border border-line rounded-xl shadow-xl z-30 w-48 overflow-hidden">
-                      <button
-                        onClick={() => { setShowRoleMenu(false); setShowCoachModal(true); }}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors flex items-center gap-2"
-                      >
-                        <span>🏋️</span> Promover a Coach
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowRoleMenu(false);
-                          startPromoteAdmin(async () => {
-                            try {
-                              await promoteToAdmin(member.id, {
-                                user_id: member.user_id,
-                                full_name: member.full_name,
-                                email: member.email,
-                              });
-                              toast.success(`${member.full_name} es ahora Administrador`);
-                            } catch (err) {
-                              toast.error(err instanceof Error ? err.message : "Error");
-                            }
-                          });
-                        }}
-                        disabled={promotingAdmin}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors flex items-center gap-2 border-t border-line/30 disabled:opacity-50"
-                      >
-                        <span>🔑</span>
-                        {promotingAdmin ? "Promoviendo..." : "Promover a Admin"}
-                      </button>
+                    <div className="absolute right-0 top-full mt-1 bg-bg-2 border border-line rounded-xl shadow-xl z-30 w-52 overflow-hidden">
+                      {/* Promover a Coach — solo si NO es ya coach */}
+                      {memberRole !== "coach" && (
+                        <button
+                          onClick={() => { setShowRoleMenu(false); setShowCoachModal(true); }}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors flex items-center gap-2"
+                        >
+                          <span>🏋️</span> Promover a Coach
+                        </button>
+                      )}
+
+                      {/* Promover a Admin — solo si NO es ya admin */}
+                      {memberRole !== "admin" && (
+                        <button
+                          onClick={() => {
+                            setShowRoleMenu(false);
+                            startPromoteAdmin(async () => {
+                              try {
+                                await promoteToAdmin(member.id, {
+                                  user_id: member.user_id,
+                                  full_name: member.full_name,
+                                  email: member.email,
+                                });
+                                toast.success(`${member.full_name} es ahora Administrador`);
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Error");
+                              }
+                            });
+                          }}
+                          disabled={promotingAdmin}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors flex items-center gap-2 border-t border-line/30 disabled:opacity-50"
+                        >
+                          <span>🔑</span>
+                          {promotingAdmin ? "Promoviendo..." : "Promover a Admin"}
+                        </button>
+                      )}
+
+                      {/* Quitar permisos — solo si tiene rol de staff */}
+                      {(memberRole === "coach" || memberRole === "admin") && member.user_id && (
+                        <button
+                          onClick={() => {
+                            setShowRoleMenu(false);
+                            startDemote(async () => {
+                              try {
+                                await demoteToMember(member.id, member.user_id!);
+                                toast.success(`Permisos de ${memberRole} removidos. Ahora es usuario del portal.`);
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Error");
+                              }
+                            });
+                          }}
+                          disabled={demoting}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 text-red-400/70 hover:text-red-400 transition-colors flex items-center gap-2 border-t border-line/30 disabled:opacity-50"
+                        >
+                          <span>↩</span>
+                          {demoting ? "Removiendo..." : "Quitar permisos"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

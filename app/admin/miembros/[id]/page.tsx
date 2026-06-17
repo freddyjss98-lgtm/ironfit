@@ -34,6 +34,7 @@ export default async function MemberDetailPage({
     { data: progress },
     { data: sales },
     { data: stats },
+    { data: memberProfile },
   ] = await Promise.all([
     supabase
       .from("vw_memberships_status")
@@ -66,6 +67,10 @@ export default async function MemberDetailPage({
       .select("*")
       .eq("member_id", id)
       .maybeSingle(),
+
+    member.user_id
+      ? supabase.from("profiles").select("role").eq("id", member.user_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   return (
@@ -80,6 +85,7 @@ export default async function MemberDetailPage({
       </div>
 
       <MemberDetailClient
+        memberRole={(memberProfile?.role as string | null | undefined) ?? null}
         member={member}
         memberships={(memberships ?? []).map((m: any) => ({
           id: m.id,
