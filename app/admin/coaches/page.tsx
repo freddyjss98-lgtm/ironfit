@@ -4,7 +4,7 @@ import CoachesClient from "./CoachesClient";
 export default async function CoachesPage() {
   const supabase = await createClient();
 
-  const [coachesRes, schedulesRes, membersRes] = await Promise.all([
+  const [coachesRes, schedulesRes, membersRes, coachProfilesRes] = await Promise.all([
     supabase
       .from("coaches")
       .select("id, full_name, phone, email, specialty, active")
@@ -20,6 +20,10 @@ export default async function CoachesPage() {
       .is("deleted_at", null)
       .not("user_id", "is", null)
       .order("full_name"),
+    supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", "coach"),
   ]);
 
   // Class count and names per coach
@@ -43,13 +47,17 @@ export default async function CoachesPage() {
     class_names: classNamesMap[c.id] ?? [],
   }));
 
-  const eligibleMembers = (membersRes.data ?? []).map((m) => ({
-    id: m.id,
-    full_name: m.full_name as string,
-    phone: m.phone as string | null,
-    email: m.email as string | null,
-    user_id: m.user_id as string,
-  }));
+  const existingCoachIds = new Set((coachProfilesRes.data ?? []).map((p) => p.id));
+
+  const eligibleMembers = (membersRes.data ?? [])
+    .filter((m) => !existingCoachIds.has(m.user_id as string))
+    .map((m) => ({
+      id: m.id,
+      full_name: m.full_name as string,
+      phone: m.phone as string | null,
+      email: m.email as string | null,
+      user_id: m.user_id as string,
+    }));
 
   return (
     <div className="space-y-5">
