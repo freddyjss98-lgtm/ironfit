@@ -390,16 +390,6 @@ export default function MemberDetailClient({
                   </button>
                   {showRoleMenu && (
                     <div className="absolute right-0 top-full mt-1 bg-bg-2 border border-line rounded-xl shadow-xl z-30 w-52 overflow-hidden">
-                      {/* Promover a Coach — solo si NO es ya coach */}
-                      {memberRole !== "coach" && (
-                        <button
-                          onClick={() => { setShowRoleMenu(false); setShowCoachModal(true); }}
-                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors flex items-center gap-2"
-                        >
-                          <span>🏋️</span> Promover a Coach
-                        </button>
-                      )}
-
                       {/* Promover a Admin — solo si NO es ya admin */}
                       {memberRole !== "admin" && (
                         <button

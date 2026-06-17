@@ -95,8 +95,14 @@ export async function promoteToCoach(memberId: string, data: {
 export async function demoteToMember(memberId: string, userId: string) {
   await assertAdmin();
   const admin = createAdminClient();
+
+  // Borrar el perfil (quita acceso al panel)
   const { error } = await admin.from("profiles").delete().eq("id", userId);
   if (error) throw new Error(error.message);
+
+  // Desvincular el user_id del registro de coaches (si existe)
+  await admin.from("coaches").update({ user_id: null }).eq("user_id", userId);
+
   revalidatePath(`/admin/miembros/${memberId}`);
   revalidatePath("/admin/miembros");
   revalidatePath("/admin/coaches");

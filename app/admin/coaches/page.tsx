@@ -7,7 +7,7 @@ export default async function CoachesPage() {
   const [coachesRes, schedulesRes, membersRes, coachProfilesRes] = await Promise.all([
     supabase
       .from("coaches")
-      .select("id, full_name, phone, email, specialty, active")
+      .select("id, full_name, phone, email, specialty, active, user_id")
       .order("active", { ascending: false })
       .order("full_name"),
     supabase
@@ -43,14 +43,16 @@ export default async function CoachesPage() {
     email: c.email as string | null,
     specialty: c.specialty as string | null,
     active: c.active as boolean,
+    user_id: c.user_id as string | null,
     class_count: classCountMap[c.id] ?? 0,
     class_names: classNamesMap[c.id] ?? [],
   }));
 
-  const existingCoachIds = new Set((coachProfilesRes.data ?? []).map((p) => p.id));
-
+  // Members with portal access that are NOT already linked to a coaches row
+  const linkedUserIds = new Set(coaches.map((c) => c.user_id).filter(Boolean) as string[]);
+  const existingCoachProfileIds = new Set((coachProfilesRes.data ?? []).map((p) => p.id));
   const eligibleMembers = (membersRes.data ?? [])
-    .filter((m) => !existingCoachIds.has(m.user_id as string))
+    .filter((m) => !linkedUserIds.has(m.user_id as string) && !existingCoachProfileIds.has(m.user_id as string))
     .map((m) => ({
       id: m.id,
       full_name: m.full_name as string,
