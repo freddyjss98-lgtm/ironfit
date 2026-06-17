@@ -202,14 +202,11 @@ export function formatWod(w: WodRow | null, dayLabel: string): string {
 
 export function handoffText(firstName: string): string {
   return (
-    `Listo ${firstName} 🙌 Un asesor de *Iron Fit Club* continuará la ` +
-    `conversación por aquí lo antes posible (horario de atención).\n\n` +
-    `Cuando quieras volver al asistente automático, escribe *bot*.`
+    `Hola ${firstName} 🙌 Para hablar directamente con un asesor de ` +
+    `*Iron Fit Club*, escríbenos o llámanos al:\n\n` +
+    `📱 *+593 959 888 060*\n\n` +
+    `¡Te atendemos con gusto! 💪`
   );
-}
-
-export function resumeText(): string {
-  return "Volviste al asistente automático 🤖\n\n" + menuText();
 }
 
 // ── Reservar clase (flujo de 2 pasos) ───────────────────────────────────────────

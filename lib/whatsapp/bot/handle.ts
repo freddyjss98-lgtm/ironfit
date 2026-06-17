@@ -19,7 +19,6 @@ import {
   formatClasses,
   formatWod,
   handoffText,
-  resumeText,
   noClassesToBookText,
   bookingPromptText,
   bookingInvalidText,
@@ -299,24 +298,9 @@ export async function processInboundMessage(
   const intent = parseIntent(msg.body);
   const name = member ? firstName(member.full_name) : "";
 
-  // ── Modo handoff: un humano está atendiendo; el bot calla salvo "bot" ───────
-  if (conversation.status === "handoff") {
-    if (intent === "resume") {
-      await supabase
-        .from("whatsapp_conversations")
-        .update({ status: "bot" })
-        .eq("id", conversation.id);
-      await reply(supabase, conversation.id, member?.id ?? null, phone, resumeText(), "resume");
-      return { handled: true, intent: "resume", replied: true };
-    }
-    // Silencio: solo registramos el entrante (ya hecho) para que lo vea recepción.
-    return { handled: true, intent: "handoff_silent", replied: false };
-  }
-
   // ── Número no registrado como socio ─────────────────────────────────────────
   if (!member) {
     if (intent === "handoff") {
-      await markHandoff(supabase, conversation.id);
       await reply(supabase, conversation.id, null, phone, handoffText("👋"), "handoff");
       return { handled: true, intent: "handoff", replied: true };
     }
@@ -375,11 +359,9 @@ export async function processInboundMessage(
       text = bookingPromptText(options, dayLabel);
       break;
     }
-    case "handoff": {
-      await markHandoff(supabase, conversation.id);
+    case "handoff":
       text = handoffText(name);
       break;
-    }
     case "menu":
     case "resume":
       text = menuText();
@@ -395,13 +377,6 @@ export async function processInboundMessage(
 
   await reply(supabase, conversation.id, member.id, phone, text, intent);
   return { handled: true, intent, replied: true };
-}
-
-async function markHandoff(supabase: SupabaseClient, conversationId: string) {
-  await supabase
-    .from("whatsapp_conversations")
-    .update({ status: "handoff", handoff_at: new Date().toISOString() })
-    .eq("id", conversationId);
 }
 
 const BOOK_CANCEL = /^(menu|menú|cancelar|salir|0|no)\b/;
