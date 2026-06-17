@@ -22,8 +22,23 @@ export default function NewMembershipForm({ members, plans, onClose, defaultMemb
   const [pending, startTransition] = useTransition();
   const [selectedPlanId, setSelectedPlanId] = useState(plans[0]?.id ?? "");
   const [paidAmount, setPaidAmount] = useState(String(plans[0]?.price ?? ""));
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
+
+  // Fecha de fin = inicio + duración del plan (igual que el cálculo del servidor)
+  const endDatePreview =
+    selectedPlan && startDate
+      ? (() => {
+          const d = new Date(startDate + "T00:00:00");
+          d.setDate(d.getDate() + selectedPlan.duration_days);
+          return d.toLocaleDateString("es-EC", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+        })()
+      : null;
 
   function handlePlanChange(id: string) {
     setSelectedPlanId(id);
@@ -45,8 +60,6 @@ export default function NewMembershipForm({ members, plans, onClose, defaultMemb
       }
     });
   }
-
-  const today = new Date().toISOString().split("T")[0];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -114,7 +127,8 @@ export default function NewMembershipForm({ members, plans, onClose, defaultMemb
             name="start_date"
             type="date"
             required
-            defaultValue={today}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
             className={inputCls}
           />
         </div>
@@ -158,21 +172,10 @@ export default function NewMembershipForm({ members, plans, onClose, defaultMemb
         </div>
       </div>
 
-      {selectedPlan && (
+      {selectedPlan && endDatePreview && (
         <div className="bg-white/5 border border-line rounded-lg px-4 py-3 text-sm text-fg/60">
-          Vence en{" "}
-          <strong className="text-fg">
-            {(() => {
-              const d = new Date();
-              d.setDate(d.getDate() + selectedPlan.duration_days);
-              return d.toLocaleDateString("es-EC", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              });
-            })()}
-          </strong>{" "}
-          ({selectedPlan.duration_days} días)
+          Vence en <strong className="text-fg">{endDatePreview}</strong> (
+          {selectedPlan.duration_days} días)
         </div>
       )}
 
