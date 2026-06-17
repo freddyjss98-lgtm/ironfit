@@ -134,6 +134,22 @@ export default function NewMembershipForm({ members, plans, onClose, defaultMemb
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>Fecha de fin (calculada)</label>
+          <div
+            className={`${inputCls} flex items-center justify-between bg-accent/5 border-accent/30`}
+          >
+            <span className={endDatePreview ? "text-fg" : "text-fg/30"}>
+              {endDatePreview ?? "Elige plan y fecha"}
+            </span>
+            {selectedPlan && (
+              <span className="text-fg/40 text-xs shrink-0">
+                +{selectedPlan.duration_days} días
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
           <label className={labelCls}>Monto pagado (USD) *</label>
           <input
             name="paid_amount"
@@ -171,13 +187,6 @@ export default function NewMembershipForm({ members, plans, onClose, defaultMemb
           <input name="notes" className={inputCls} placeholder="Opcional" />
         </div>
       </div>
-
-      {selectedPlan && endDatePreview && (
-        <div className="bg-white/5 border border-line rounded-lg px-4 py-3 text-sm text-fg/60">
-          Vence en <strong className="text-fg">{endDatePreview}</strong> (
-          {selectedPlan.duration_days} días)
-        </div>
-      )}
 
       <div className="flex gap-3 justify-end pt-2">
         <button
