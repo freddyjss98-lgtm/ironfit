@@ -97,92 +97,132 @@ export async function promoteMemberToCoach(memberId: string, specialty: string) 
   revalidatePath(`/admin/miembros/${memberId}`);
 }
 
+// Resultado uniforme: nunca lanza al cliente (en producción Next oculta el
+// mensaje de los throw), sino que devuelve { ok, error } para mostrarlo tal cual.
+type AccessResult =
+  | { ok: true; credentials: CoachCredentials | null; reused: boolean }
+  | { ok: false; error: string };
+
 // ─── Dar acceso al panel a un coach existente ──────────────────────────────────
-// Maneja los 3 casos en un solo punto:
+// Maneja todos los casos en un solo punto:
 //  1. El coach ya tiene cuenta vinculada → solo asegura role='coach'.
-//  2. Existe un miembro con ese email y cuenta → reusa esa cuenta (sin clave nueva).
-//  3. No hay cuenta → genera credenciales temporales nuevas y las devuelve.
+//  2. Ya existe una cuenta de auth con ese email (sea miembro o huérfana) →
+//     la reusa, le da rol coach y le resetea la contraseña para poder compartirla.
+//  3. No hay cuenta → crea una nueva con contraseña temporal.
 
-export async function grantCoachPanelAccess(
-  coachId: string
-): Promise<{ credentials: CoachCredentials | null }> {
-  const { supabase } = await assertAdmin();
-  const admin = createAdminClient();
-
-  const { data: coach } = await supabase
-    .from("coaches")
-    .select("id, full_name, email, user_id")
-    .eq("id", coachId)
-    .maybeSingle();
-  if (!coach) throw new Error("Coach no encontrado");
-
-  async function setCoachProfile(userId: string) {
-    const { error } = await admin.from("profiles").upsert({
-      id: userId,
-      full_name: coach!.full_name,
-      email: coach!.email,
-      role: "coach",
-    });
-    if (error) throw new Error(error.message);
-  }
-
-  // Caso 1: ya tiene cuenta vinculada
-  if (coach.user_id) {
-    await setCoachProfile(coach.user_id);
-    revalidateBoth();
-    return { credentials: null };
-  }
-
-  if (!coach.email) {
-    throw new Error("Agrega un correo al coach (botón Editar) antes de darle acceso al panel.");
-  }
-
-  // Caso 2: ya existe un miembro con ese correo y cuenta → reusar
-  const { data: member } = await supabase
-    .from("members")
-    .select("user_id")
-    .eq("email", coach.email)
-    .not("user_id", "is", null)
-    .maybeSingle();
-
-  if (member?.user_id) {
-    await setCoachProfile(member.user_id);
-    const { error } = await admin.from("coaches").update({ user_id: member.user_id }).eq("id", coachId);
-    if (error) throw new Error(error.message);
-    revalidateBoth();
-    return { credentials: null };
-  }
-
-  // Caso 3: crear cuenta nueva con contraseña temporal.
-  // is_member:true evita que el trigger handle_new_user cree un profile 'admin';
-  // luego asignamos role='coach' explícitamente.
-  const tempPassword = generateTempPassword();
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email: coach.email,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: {
-      full_name: coach.full_name,
-      is_member: true,
-      must_change_password: true,
-    },
-  });
-  if (createErr || !created.user) {
-    throw new Error(friendlyAuthError(createErr?.message ?? "No se pudo crear el acceso"));
-  }
-
+export async function grantCoachPanelAccess(coachId: string): Promise<AccessResult> {
   try {
-    await setCoachProfile(created.user.id);
-    const { error } = await admin.from("coaches").update({ user_id: created.user.id }).eq("id", coachId);
-    if (error) throw new Error(error.message);
-  } catch (e) {
-    // Rollback: no dejar una cuenta de auth huérfana.
-    await admin.auth.admin.deleteUser(created.user.id);
-    throw e;
-  }
+    const { supabase } = await assertAdmin();
+    const admin = createAdminClient();
 
-  revalidateBoth();
-  return { credentials: { email: coach.email, tempPassword } };
+    const { data: coach } = await supabase
+      .from("coaches")
+      .select("id, full_name, email, user_id")
+      .eq("id", coachId)
+      .maybeSingle();
+    if (!coach) return { ok: false, error: "Coach no encontrado" };
+
+    async function setCoachProfile(userId: string) {
+      const { error } = await admin.from("profiles").upsert({
+        id: userId,
+        full_name: coach!.full_name,
+        email: coach!.email,
+        role: "coach",
+      });
+      if (error) throw new Error(error.message);
+    }
+
+    // Caso 1: ya tiene cuenta vinculada → solo asegurar el rol
+    if (coach.user_id) {
+      await setCoachProfile(coach.user_id);
+      revalidateBoth();
+      return { ok: true, credentials: null, reused: true };
+    }
+
+    if (!coach.email) {
+      return { ok: false, error: "Agrega un correo al coach (botón Editar) antes de darle acceso al panel." };
+    }
+
+    // Caso 2: ya existe una cuenta de auth con ese email → reusar + resetear clave
+    const { data: existingUserId } = await admin.rpc("find_auth_user_by_email", {
+      p_email: coach.email,
+    });
+
+    if (existingUserId) {
+      const tempPassword = generateTempPassword();
+      const { error: pwErr } = await admin.auth.admin.updateUserById(existingUserId as string, {
+        password: tempPassword,
+        user_metadata: { full_name: coach.full_name, is_member: true, must_change_password: true },
+      });
+      if (pwErr) return { ok: false, error: pwErr.message };
+
+      await setCoachProfile(existingUserId as string);
+      const { error } = await admin
+        .from("coaches")
+        .update({ user_id: existingUserId as string })
+        .eq("id", coachId);
+      if (error) return { ok: false, error: error.message };
+
+      revalidateBoth();
+      return { ok: true, credentials: { email: coach.email, tempPassword }, reused: true };
+    }
+
+    // Caso 3: crear cuenta nueva con contraseña temporal.
+    // is_member:true evita que el trigger handle_new_user cree un profile 'admin';
+    // luego asignamos role='coach' explícitamente.
+    const tempPassword = generateTempPassword();
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email: coach.email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name: coach.full_name, is_member: true, must_change_password: true },
+    });
+    if (createErr || !created.user) {
+      return { ok: false, error: friendlyAuthError(createErr?.message ?? "No se pudo crear el acceso") };
+    }
+
+    try {
+      await setCoachProfile(created.user.id);
+      const { error } = await admin.from("coaches").update({ user_id: created.user.id }).eq("id", coachId);
+      if (error) throw new Error(error.message);
+    } catch (e) {
+      await admin.auth.admin.deleteUser(created.user.id); // rollback
+      return { ok: false, error: e instanceof Error ? e.message : "Error al vincular el acceso" };
+    }
+
+    revalidateBoth();
+    return { ok: true, credentials: { email: coach.email, tempPassword }, reused: false };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error inesperado" };
+  }
+}
+
+// ─── Resetear la contraseña de un coach (genera una nueva temporal) ────────────
+
+export async function resetCoachPassword(coachId: string): Promise<AccessResult> {
+  try {
+    const { supabase } = await assertAdmin();
+    const admin = createAdminClient();
+
+    const { data: coach } = await supabase
+      .from("coaches")
+      .select("full_name, email, user_id")
+      .eq("id", coachId)
+      .maybeSingle();
+    if (!coach) return { ok: false, error: "Coach no encontrado" };
+    if (!coach.user_id) return { ok: false, error: "Este coach no tiene acceso al panel todavía." };
+
+    const tempPassword = generateTempPassword();
+    const { error } = await admin.auth.admin.updateUserById(coach.user_id, {
+      password: tempPassword,
+      user_metadata: { full_name: coach.full_name, is_member: true, must_change_password: true },
+    });
+    if (error) return { ok: false, error: error.message };
+
+    return { ok: true, credentials: { email: coach.email ?? "", tempPassword }, reused: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error inesperado" };
+  }
 }
 
 // ─── Quitar acceso al panel (pero el coach sigue en la lista) ──────────────────

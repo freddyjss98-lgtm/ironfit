@@ -9,6 +9,7 @@ import {
   promoteMemberToCoach,
   revokeCoachPanelAccess,
   grantCoachPanelAccess,
+  resetCoachPassword,
   type CoachCredentials,
 } from "./actions";
 
@@ -281,7 +282,7 @@ function CredentialsModal({
       <div className="bg-[#111] border border-emerald-500/30 rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg uppercase tracking-tight text-emerald-400">
-            Acceso creado
+            Credenciales de acceso
           </h2>
           <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">✕</button>
         </div>
@@ -289,6 +290,7 @@ function CredentialsModal({
         <p className="text-fg/50 text-sm">
           Comparte estas credenciales con <span className="text-fg font-semibold">{coachName}</span>.
           Por seguridad, <span className="text-amber-400">esta contraseña solo se muestra una vez</span>.
+          Si se pierde, genera una nueva con &quot;Ver / resetear clave&quot;.
         </p>
 
         <div className="space-y-2">
@@ -338,6 +340,7 @@ function CoachCard({
   const [deletePending, startDelete] = useTransition();
   const [revokePending, startRevoke] = useTransition();
   const [grantPending, startGrant] = useTransition();
+  const [resetPending, startReset] = useTransition();
 
   function handleDelete() {
     if (!confirm(`¿Eliminar a ${coach.full_name}?\n\n${coach.user_id ? "También se revocará el acceso al panel." : ""}`)) return;
@@ -377,16 +380,28 @@ function CoachCard({
 
   function handleGrantAccess() {
     startGrant(async () => {
-      try {
-        const { credentials } = await grantCoachPanelAccess(coach.id);
-        if (credentials) {
-          onGranted(coach.full_name, credentials);
-        } else {
-          toast.success("Acceso al panel activado");
-        }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error");
+      const res = await grantCoachPanelAccess(coach.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      if (res.credentials) {
+        onGranted(coach.full_name, res.credentials);
+      } else {
+        toast.success("Acceso al panel activado");
+      }
+    });
+  }
+
+  function handleResetPassword() {
+    if (!confirm(`¿Generar una nueva contraseña temporal para ${coach.full_name}?\n\nLa contraseña anterior dejará de funcionar.`)) return;
+    startReset(async () => {
+      const res = await resetCoachPassword(coach.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      if (res.credentials) onGranted(coach.full_name, res.credentials);
     });
   }
 
@@ -477,15 +492,24 @@ function CoachCard({
           </button>
         </div>
 
-        {/* Acceso al panel: dar o quitar según estado */}
+        {/* Acceso al panel: dar / resetear / quitar según estado */}
         {coach.user_id ? (
-          <button
-            onClick={handleRevokeAccess}
-            disabled={revokePending}
-            className="w-full text-xs text-red-400/60 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 py-1.5 rounded-lg transition-colors disabled:opacity-40"
-          >
-            {revokePending ? "Removiendo acceso..." : "↩ Quitar acceso al panel"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleResetPassword}
+              disabled={resetPending}
+              className="flex-1 text-xs text-amber-400/80 hover:text-amber-300 border border-amber-500/25 hover:border-amber-500/50 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+            >
+              {resetPending ? "Generando..." : "🔑 Ver / resetear clave"}
+            </button>
+            <button
+              onClick={handleRevokeAccess}
+              disabled={revokePending}
+              className="text-xs text-red-400/60 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+            >
+              {revokePending ? "..." : "↩ Quitar"}
+            </button>
+          </div>
         ) : (
           <button
             onClick={handleGrantAccess}
