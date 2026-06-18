@@ -27,6 +27,7 @@ type Member = {
   full_name: string;
   phone: string;
   email: string | null;
+  cedula: string | null;
   birthday: string | null;
   photo_url: string | null;
   height_cm: number | null;
@@ -152,6 +153,17 @@ function EditMemberModal({ member, onClose }: { member: Member; onClose: () => v
               <div className="flex flex-col gap-1.5">
                 <label className={labelCls}>Email</label>
                 <input name="email" type="email" defaultValue={member.email ?? ""} className={inputCls} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Cédula</label>
+                <input
+                  name="cedula"
+                  inputMode="numeric"
+                  maxLength={10}
+                  defaultValue={member.cedula ?? ""}
+                  className={inputCls}
+                  placeholder="10 dígitos"
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className={labelCls}>Cumpleaños</label>
@@ -973,6 +985,7 @@ function ResumenTab({
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Field label="Cédula" value={member.cedula ?? "—"} />
         <Field label="Altura" value={member.height_cm ? `${member.height_cm} cm` : "—"} />
         <Field label="Género" value={member.gender === "M" ? "Masculino" : member.gender === "F" ? "Femenino" : member.gender === "other" ? "Otro" : "—"} />
         <Field label="Correo" value={member.email ?? "—"} />

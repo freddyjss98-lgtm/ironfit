@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { isValidCedula, normalizeCedula } from "@/lib/cedula";
 
 async function assertAdmin() {
   const supabase = await createClient();
@@ -24,12 +25,20 @@ async function assertAdmin() {
 export async function updateMemberFull(memberId: string, formData: FormData) {
   const supabase = await createClient();
 
+  // Cédula opcional al editar (los socios antiguos no la tienen), pero si se
+  // ingresa debe ser válida.
+  const cedulaRaw = normalizeCedula((formData.get("cedula") as string) || "");
+  if (cedulaRaw && !isValidCedula(cedulaRaw)) {
+    throw new Error("La cédula ingresada no es válida");
+  }
+
   const { error } = await supabase
     .from("members")
     .update({
       full_name: (formData.get("full_name") as string).trim(),
       phone: (formData.get("phone") as string).trim(),
       email: (formData.get("email") as string) || null,
+      cedula: cedulaRaw || null,
       birthday: (formData.get("birthday") as string) || null,
       gender: (formData.get("gender") as string) || null,
       height_cm: formData.get("height_cm") ? parseFloat(formData.get("height_cm") as string) : null,
@@ -41,7 +50,10 @@ export async function updateMemberFull(memberId: string, formData: FormData) {
     })
     .eq("id", memberId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Esa cédula ya está registrada");
+    throw new Error(error.message);
+  }
   revalidatePath(`/admin/miembros/${memberId}`);
   revalidatePath("/admin/miembros");
 }

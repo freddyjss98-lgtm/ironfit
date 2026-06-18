@@ -15,6 +15,7 @@ type Member = {
   full_name: string;
   phone: string;
   email: string | null;
+  cedula: string | null;
   birthday: string | null;
   photo_url: string | null;
   gender: string | null;
@@ -281,10 +282,11 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 }
 
 function downloadCSV(rows: Member[], filename: string) {
-  const headers = ["Nombre","Teléfono","Email","Cumpleaños","Género","Fecha Inscripción","Estado","Plan","Membresía Desde","Membresía Hasta","Días Restantes"];
+  const headers = ["Nombre","Cédula","Teléfono","Email","Cumpleaños","Género","Fecha Inscripción","Estado","Plan","Membresía Desde","Membresía Hasta","Días Restantes"];
   const lines = rows.map((r) =>
     [
       `"${r.full_name}"`,
+      r.cedula ?? "",
       r.phone,
       r.email ?? "",
       r.birthday ?? "",
