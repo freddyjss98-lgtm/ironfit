@@ -148,7 +148,10 @@ export async function createMembership(formData: FormData) {
   revalidatePath("/admin");
 }
 
-export async function renewMembership(membershipId: string) {
+export async function renewMembership(
+  membershipId: string,
+  opts?: { paidAmount?: number; paymentMethod?: string; bankReference?: string | null }
+): Promise<{ newStart: string; newEnd: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -171,6 +174,10 @@ export async function renewMembership(membershipId: string) {
     .toISOString()
     .split("T")[0];
 
+  const amount = opts?.paidAmount ?? plan.price;
+  const method = opts?.paymentMethod ?? "transfer";
+  const bankRef = opts?.bankReference ?? null;
+
   const { data: membership, error: mError } = await supabase
     .from("memberships")
     .insert({
@@ -178,8 +185,8 @@ export async function renewMembership(membershipId: string) {
       plan_id: current.plan_id,
       start_date: newStart,
       end_date: newEnd,
-      paid_amount: plan.price,
-      notes: `Renovación automática`,
+      paid_amount: amount,
+      notes: `Renovación`,
       created_by: user?.id,
     })
     .select("id")
@@ -195,8 +202,9 @@ export async function renewMembership(membershipId: string) {
     .insert({
       member_id: current.member_id,
       sale_date: saleDate,
-      total: plan.price,
-      payment_method: "transfer",
+      total: amount,
+      payment_method: method,
+      bank_reference: bankRef,
       notes: `Renovación: ${plan.name}`,
       created_by: user?.id,
     })
@@ -210,13 +218,14 @@ export async function renewMembership(membershipId: string) {
       membership_id: membership.id,
       description: `${plan.name} (${plan.duration_days} días) — Renovación`,
       quantity: 1,
-      unit_price: plan.price,
+      unit_price: amount,
     });
   }
 
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/ventas");
   revalidatePath("/admin");
+  return { newStart, newEnd };
 }
 
 // ── Congelar / reanudar (pausa por viaje, lesión, etc.) ────────────────────────
