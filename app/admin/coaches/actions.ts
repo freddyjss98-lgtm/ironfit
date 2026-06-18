@@ -103,38 +103,74 @@ type AccessResult =
   | { ok: true; credentials: CoachCredentials | null; reused: boolean }
   | { ok: false; error: string };
 
-// ─── Dar acceso al panel a un coach existente ──────────────────────────────────
-// Maneja todos los casos en un solo punto:
-//  1. El coach ya tiene cuenta vinculada → solo asegura role='coach'.
-//  2. Ya existe una cuenta de auth con ese email (sea miembro o huérfana) →
-//     la reusa, le da rol coach y le resetea la contraseña para poder compartirla.
-//  3. No hay cuenta → crea una nueva con contraseña temporal.
+export type AccessLevel = "coach" | "admin";
 
-export async function grantCoachPanelAccess(coachId: string): Promise<AccessResult> {
+// ─── Dar acceso al panel a un coach existente ──────────────────────────────────
+// `level` define el acceso: 'admin' ve todo el panel, 'coach' ve lo limitado.
+// Maneja todos los casos en un solo punto:
+//  1. El coach ya tiene cuenta vinculada → solo asegura el rol.
+//  2. Ya existe una cuenta de auth con ese email (sea miembro o huérfana) →
+//     la reusa, le da el rol y le resetea la contraseña para compartirla.
+//  3. No hay cuenta → crea una nueva con contraseña temporal.
+// Además, asegura que el coach tenga ficha de atleta (members) para que también
+// aparezca en la pantalla Miembros.
+
+export async function grantCoachPanelAccess(
+  coachId: string,
+  level: AccessLevel = "coach"
+): Promise<AccessResult> {
   try {
     const { supabase } = await assertAdmin();
     const admin = createAdminClient();
 
     const { data: coach } = await supabase
       .from("coaches")
-      .select("id, full_name, email, user_id")
+      .select("id, full_name, email, phone, user_id")
       .eq("id", coachId)
       .maybeSingle();
     if (!coach) return { ok: false, error: "Coach no encontrado" };
 
-    async function setCoachProfile(userId: string) {
+    // Nunca degrada: si la cuenta ya es 'admin' u 'owner' y se pide 'coach',
+    // se respeta el rol superior existente.
+    async function setStaffProfile(userId: string) {
+      const { data: existing } = await admin
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+      const current = existing?.role as string | undefined;
+      const keepHigher = level === "coach" && (current === "admin" || current === "owner");
+      const finalRole = keepHigher ? current! : level;
       const { error } = await admin.from("profiles").upsert({
         id: userId,
         full_name: coach!.full_name,
         email: coach!.email,
-        role: "coach",
+        role: finalRole,
       });
       if (error) throw new Error(error.message);
     }
 
-    // Caso 1: ya tiene cuenta vinculada → solo asegurar el rol
+    // Asegura que el coach también tenga ficha de atleta (aparece en Miembros).
+    async function ensureMemberRecord(userId: string) {
+      const { data: existing } = await admin
+        .from("members")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (existing) return;
+      await admin.from("members").insert({
+        full_name: coach!.full_name,
+        phone: coach!.phone ?? "",
+        email: coach!.email,
+        user_id: userId,
+        status: "active",
+      });
+    }
+
+    // Caso 1: ya tiene cuenta vinculada → solo asegurar rol + ficha de atleta
     if (coach.user_id) {
-      await setCoachProfile(coach.user_id);
+      await setStaffProfile(coach.user_id);
+      await ensureMemberRecord(coach.user_id);
       revalidateBoth();
       return { ok: true, credentials: null, reused: true };
     }
@@ -156,12 +192,13 @@ export async function grantCoachPanelAccess(coachId: string): Promise<AccessResu
       });
       if (pwErr) return { ok: false, error: pwErr.message };
 
-      await setCoachProfile(existingUserId as string);
+      await setStaffProfile(existingUserId as string);
       const { error } = await admin
         .from("coaches")
         .update({ user_id: existingUserId as string })
         .eq("id", coachId);
       if (error) return { ok: false, error: error.message };
+      await ensureMemberRecord(existingUserId as string);
 
       revalidateBoth();
       return { ok: true, credentials: { email: coach.email, tempPassword }, reused: true };
@@ -169,7 +206,7 @@ export async function grantCoachPanelAccess(coachId: string): Promise<AccessResu
 
     // Caso 3: crear cuenta nueva con contraseña temporal.
     // is_member:true evita que el trigger handle_new_user cree un profile 'admin';
-    // luego asignamos role='coach' explícitamente.
+    // luego asignamos el rol explícitamente.
     const tempPassword = generateTempPassword();
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: coach.email,
@@ -182,9 +219,10 @@ export async function grantCoachPanelAccess(coachId: string): Promise<AccessResu
     }
 
     try {
-      await setCoachProfile(created.user.id);
+      await setStaffProfile(created.user.id);
       const { error } = await admin.from("coaches").update({ user_id: created.user.id }).eq("id", coachId);
       if (error) throw new Error(error.message);
+      await ensureMemberRecord(created.user.id);
     } catch (e) {
       await admin.auth.admin.deleteUser(created.user.id); // rollback
       return { ok: false, error: e instanceof Error ? e.message : "Error al vincular el acceso" };

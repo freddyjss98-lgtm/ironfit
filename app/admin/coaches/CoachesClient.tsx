@@ -11,6 +11,7 @@ import {
   grantCoachPanelAccess,
   resetCoachPassword,
   type CoachCredentials,
+  type AccessLevel,
 } from "./actions";
 
 type Coach = {
@@ -341,6 +342,8 @@ function CoachCard({
   const [revokePending, startRevoke] = useTransition();
   const [grantPending, startGrant] = useTransition();
   const [resetPending, startReset] = useTransition();
+  const [showLevel, setShowLevel] = useState(false);
+  const [level, setLevel] = useState<AccessLevel>("coach");
 
   function handleDelete() {
     if (!confirm(`¿Eliminar a ${coach.full_name}?\n\n${coach.user_id ? "También se revocará el acceso al panel." : ""}`)) return;
@@ -379,8 +382,9 @@ function CoachCard({
   }
 
   function handleGrantAccess() {
+    setShowLevel(false);
     startGrant(async () => {
-      const res = await grantCoachPanelAccess(coach.id);
+      const res = await grantCoachPanelAccess(coach.id, level);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -388,7 +392,7 @@ function CoachCard({
       if (res.credentials) {
         onGranted(coach.full_name, res.credentials);
       } else {
-        toast.success("Acceso al panel activado");
+        toast.success(`Acceso de ${level === "admin" ? "administrador" : "coach"} activado`);
       }
     });
   }
@@ -512,7 +516,7 @@ function CoachCard({
           </div>
         ) : (
           <button
-            onClick={handleGrantAccess}
+            onClick={() => { setLevel("coach"); setShowLevel(true); }}
             disabled={grantPending}
             className="w-full text-xs text-blue-400/80 hover:text-blue-300 border border-blue-500/25 hover:border-blue-500/50 bg-blue-500/5 py-1.5 rounded-lg transition-colors disabled:opacity-40"
           >
@@ -520,6 +524,62 @@ function CoachCard({
           </button>
         )}
       </div>
+
+      {/* Modal: elegir nivel de acceso */}
+      {showLevel && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111] border border-line rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-lg uppercase tracking-tight">Nivel de acceso</h2>
+                <p className="text-fg/40 text-xs mt-0.5">{coach.full_name}</p>
+              </div>
+              <button onClick={() => setShowLevel(false)} className="text-fg/40 hover:text-fg text-xl leading-none">✕</button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setLevel("coach")}
+                className={`text-left p-3 rounded-xl border transition-colors ${
+                  level === "coach" ? "border-accent bg-accent/10" : "border-line/40 hover:border-line"
+                }`}
+              >
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <span className={`w-3 h-3 rounded-full border-2 ${level === "coach" ? "border-accent bg-accent" : "border-fg/30"}`} />
+                  Coach
+                </p>
+                <p className="text-fg/40 text-xs mt-1 pl-5">Panel limitado: asistencia, clases, miembros, eventos.</p>
+              </button>
+
+              <button
+                onClick={() => setLevel("admin")}
+                className={`text-left p-3 rounded-xl border transition-colors ${
+                  level === "admin" ? "border-accent bg-accent/10" : "border-line/40 hover:border-line"
+                }`}
+              >
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <span className={`w-3 h-3 rounded-full border-2 ${level === "admin" ? "border-accent bg-accent" : "border-fg/30"}`} />
+                  Admin
+                </p>
+                <p className="text-fg/40 text-xs mt-1 pl-5">Acceso total al panel. Úsalo para el dueño o encargados.</p>
+              </button>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-1">
+              <button onClick={() => setShowLevel(false)} className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={handleGrantAccess}
+                disabled={grantPending}
+                className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {grantPending ? "Creando..." : "Crear acceso"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
