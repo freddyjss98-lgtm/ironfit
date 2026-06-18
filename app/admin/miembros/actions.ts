@@ -2,14 +2,20 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { isValidCedula, normalizeCedula } from "@/lib/cedula";
 
 export async function createMember(formData: FormData) {
   const supabase = await createClient();
+
+  const cedula = normalizeCedula((formData.get("cedula") as string) || "");
+  if (!cedula) throw new Error("La cédula es obligatoria");
+  if (!isValidCedula(cedula)) throw new Error("La cédula ingresada no es válida");
 
   const { error } = await supabase.from("members").insert({
     full_name: formData.get("full_name") as string,
     phone: formData.get("phone") as string,
     email: (formData.get("email") as string) || null,
+    cedula,
     birthday: (formData.get("birthday") as string) || null,
     gender: (formData.get("gender") as string) || null,
     photo_url: (formData.get("photo_url") as string) || null,
@@ -18,7 +24,10 @@ export async function createMember(formData: FormData) {
     notes: (formData.get("notes") as string) || null,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("Esa cédula ya está registrada");
+    throw new Error(error.message);
+  }
   revalidatePath("/admin/miembros");
 }
 

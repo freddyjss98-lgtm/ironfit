@@ -4,6 +4,7 @@ import { randomInt } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { isValidCedula, normalizeCedula } from "@/lib/cedula";
 
 export type AccessCredentials = {
   email: string;
@@ -104,9 +105,12 @@ export async function createMemberWithAccess(
 
   const fullName = (formData.get("full_name") as string)?.trim();
   const email = (formData.get("email") as string)?.trim();
+  const cedula = normalizeCedula((formData.get("cedula") as string) || "");
 
   if (!fullName) throw new Error("El nombre completo es obligatorio");
   if (!email) throw new Error("El correo es obligatorio para crear el acceso al portal");
+  if (!cedula) throw new Error("La cédula es obligatoria");
+  if (!isValidCedula(cedula)) throw new Error("La cédula ingresada no es válida");
 
   const { data: member, error } = await supabase
     .from("members")
@@ -114,6 +118,7 @@ export async function createMemberWithAccess(
       full_name: fullName,
       phone: (formData.get("phone") as string) || "",
       email,
+      cedula,
       birthday: (formData.get("birthday") as string) || null,
       gender: (formData.get("gender") as string) || null,
       photo_url: (formData.get("photo_url") as string) || null,
@@ -124,7 +129,10 @@ export async function createMemberWithAccess(
     .select("id")
     .single();
 
-  if (error || !member) throw new Error(error?.message ?? "No se pudo crear el socio");
+  if (error || !member) {
+    if (error?.code === "23505") throw new Error("Esa cédula ya está registrada");
+    throw new Error(error?.message ?? "No se pudo crear el socio");
+  }
 
   try {
     const creds = await provisionAccess(member.id, email, fullName);

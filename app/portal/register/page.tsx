@@ -80,6 +80,24 @@ export default async function RegisterPage({ searchParams }: Props) {
             </div>
 
             <div className="flex flex-col gap-1.5">
+              <label className="text-white/60 text-sm" htmlFor="cedula">
+                Cédula *
+              </label>
+              <input
+                id="cedula"
+                name="cedula"
+                type="text"
+                inputMode="numeric"
+                required
+                maxLength={10}
+                pattern="\d{10}"
+                autoComplete="off"
+                className="bg-white/5 border border-white/15 text-white rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#e84b1f] transition-colors placeholder:text-white/20"
+                placeholder="10 dígitos"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <label className="text-white/60 text-sm" htmlFor="phone">
                 Teléfono *
               </label>

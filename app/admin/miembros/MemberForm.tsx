@@ -142,6 +142,21 @@ export default function MemberForm({ member, onClose }: Props) {
           />
         </div>
 
+        {!member && (
+          <div className="flex flex-col gap-1.5">
+            <label className={labelCls}>Cédula *</label>
+            <input
+              name="cedula"
+              required
+              inputMode="numeric"
+              maxLength={10}
+              pattern="\d{10}"
+              className={inputCls}
+              placeholder="10 dígitos"
+            />
+          </div>
+        )}
+
         <div className="flex flex-col gap-1.5">
           <label className={labelCls}>Teléfono *</label>
           <input
