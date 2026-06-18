@@ -3,6 +3,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+function dayAfter(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
 type SaleItem = {
   productId: string;
   name: string;
@@ -100,6 +106,7 @@ export async function createCounterSale(params: {
 
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const saleDate = new Date().toISOString().split("T")[0];
+  let membershipStartsAt: string | null = null; // fecha de inicio si se encadenó
 
   const { data: sale, error } = await supabase
     .from("sales")
@@ -116,6 +123,23 @@ export async function createCounterSale(params: {
     .single();
 
   if (error || !sale) throw new Error(error?.message ?? "Error al registrar venta");
+
+  // Para encadenar membresías: si el socio ya tiene una activa vigente, la nueva
+  // arranca el día siguiente a su vencimiento (no pierde los días restantes).
+  const today = new Date().toISOString().split("T")[0];
+  let chainEnd: string | null = null;
+  if (hasPlan && memberId) {
+    const { data: active } = await supabase
+      .from("memberships")
+      .select("end_date")
+      .eq("member_id", memberId)
+      .eq("status", "active")
+      .gte("end_date", today)
+      .order("end_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    chainEnd = (active?.end_date as string) ?? null;
+  }
 
   for (const item of items) {
     if (item.type === "product") {
@@ -139,24 +163,32 @@ export async function createCounterSale(params: {
         .update({ stock: Math.max(0, (prod?.stock ?? 0) - item.quantity) })
         .eq("id", item.refId);
     } else {
-      // Membresía: crear el periodo (inicio hoy, fin según el plan) + ítem de venta
-      const start = new Date();
+      // Membresía: encadenar si ya hay una vigente (o tras un ítem previo del carrito).
+      const startStr = chainEnd && chainEnd >= today ? dayAfter(chainEnd) : today;
+      const start = new Date(startStr + "T00:00:00");
       const end = new Date(start);
       end.setDate(end.getDate() + (item.durationDays ?? 30));
+      const endStr = end.toISOString().split("T")[0];
 
       const { data: membership } = await supabase
         .from("memberships")
         .insert({
           member_id: memberId,
           plan_id: item.refId,
-          start_date: start.toISOString().split("T")[0],
-          end_date: end.toISOString().split("T")[0],
+          start_date: startStr,
+          end_date: endStr,
           paid_amount: item.unitPrice * item.quantity,
           notes: "Venta de mostrador",
           created_by: user?.id,
         })
         .select("id")
         .single();
+
+      // Si la membresía no arranca hoy (se encadenó), lo reportamos al cajero.
+      if (startStr > today && !membershipStartsAt) membershipStartsAt = startStr;
+
+      // El siguiente ítem de membresía (si lo hay) se encadena tras este.
+      chainEnd = endStr;
 
       await supabase.from("sale_items").insert({
         sale_id: sale.id,
@@ -174,6 +206,8 @@ export async function createCounterSale(params: {
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/miembros");
   revalidatePath("/admin");
+
+  return { membershipStartsAt };
 }
 
 export async function createSale(formData: FormData) {

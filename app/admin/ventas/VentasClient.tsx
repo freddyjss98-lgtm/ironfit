@@ -244,7 +244,7 @@ function GenerarVentaForm({
     startTransition(async () => {
       try {
         if (items.length > 0) {
-          await createCounterSale({
+          const res = await createCounterSale({
             memberId: memberId || null,
             paymentMethod,
             bankReference: bankReference || null,
@@ -258,6 +258,16 @@ function GenerarVentaForm({
               durationDays: i.durationDays,
             })),
           });
+          if (res?.membershipStartsAt) {
+            const d = new Date(res.membershipStartsAt + "T00:00:00").toLocaleDateString("es-EC", {
+              day: "numeric",
+              month: "long",
+            });
+            toast.success(`Venta registrada — ${fmt(total)}`);
+            toast.info(`La membresía inicia el ${d} (al vencer la actual, no pierde días)`);
+            onClose();
+            return;
+          }
         } else {
           const fd = new FormData();
           fd.set("description", notes || "Venta manual");

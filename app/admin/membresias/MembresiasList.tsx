@@ -551,8 +551,12 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
   const [editing, setEditing] = useState<Membership | null>(null);
   const [cancelling, setCancelling] = useState<Membership | null>(null);
 
+  const today = new Date().toISOString().split("T")[0];
   const expired = memberships.filter((m) => m.effective_status === "expired");
-  const active = memberships.filter((m) => m.effective_status === "active");
+  const activeAll = memberships.filter((m) => m.effective_status === "active");
+  // Programadas: ya pagadas pero su periodo aún no empieza (encadenadas).
+  const scheduled = activeAll.filter((m) => m.start_date > today);
+  const active = activeAll.filter((m) => m.start_date <= today);
   const frozen = memberships.filter((m) => m.effective_status === "frozen");
   const cancelled = memberships.filter((m) => m.effective_status === "cancelled");
   // Por vencer: activas que vencen en los próximos 7 días (incluye hoy)
@@ -599,6 +603,17 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
           onEdit={setEditing}
           onCancel={setCancelling}
         />
+        {scheduled.length > 0 && (
+          <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.04] p-4">
+            <MembresiaSection
+              title="🗓 Programadas (inician al vencer la actual)"
+              rows={scheduled}
+              csvFilename="membresias_programadas.csv"
+              onEdit={setEditing}
+              onCancel={setCancelling}
+            />
+          </div>
+        )}
         {frozen.length > 0 && (
           <div className="rounded-xl border border-blue-500/25 bg-blue-500/[0.04] p-4">
             <MembresiaSection

@@ -1,7 +1,44 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+
+function dayAfter(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
+/**
+ * Calcula desde qué fecha debe correr una NUEVA membresía para un socio:
+ * si ya tiene una activa vigente, arranca el día siguiente a su vencimiento
+ * (así el socio no pierde los días que le quedan). Si no, arranca en `fallback`
+ * (hoy por defecto).
+ */
+async function nextMembershipStart(
+  supabase: SupabaseClient,
+  memberId: string,
+  fallback?: string
+): Promise<string> {
+  const today = new Date().toISOString().split("T")[0];
+  const base = fallback ?? today;
+  const { data } = await supabase
+    .from("memberships")
+    .select("end_date")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .gte("end_date", today)
+    .order("end_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (data?.end_date) {
+    const stacked = dayAfter(data.end_date as string);
+    // Usa la fecha más tardía entre la solicitada y la encadenada.
+    return stacked > base ? stacked : base;
+  }
+  return base;
+}
 
 // Devuelve la membresía activa (vigente) del socio, si la tiene. Una membresía
 // cuenta como activa si status='active' y su fecha de fin no ha pasado.
@@ -42,14 +79,6 @@ export async function createMembership(formData: FormData) {
   const bankReference = (formData.get("bank_reference") as string) || null;
   const notes = (formData.get("notes") as string) || null;
 
-  // Backstop: un socio no puede tener dos membresías activas a la vez.
-  const existingActive = await getActiveMembership(memberId);
-  if (existingActive) {
-    throw new Error(
-      `Este socio ya tiene una membresía activa (${existingActive.plan_name}, vence ${existingActive.end_date}). Gestiónala desde su ficha para agregar días, cambiar de plan o cancelarla.`
-    );
-  }
-
   // Get plan duration to calculate end_date
   const { data: plan, error: planError } = await supabase
     .from("membership_plans")
@@ -59,7 +88,10 @@ export async function createMembership(formData: FormData) {
 
   if (planError || !plan) throw new Error("Plan no encontrado");
 
-  const start = new Date(startDate);
+  // Si el socio ya tiene una membresía activa, la nueva se encadena: arranca el
+  // día siguiente al vencimiento actual para no perder los días restantes.
+  const effectiveStart = await nextMembershipStart(supabase, memberId, startDate);
+  const start = new Date(effectiveStart + "T00:00:00");
   const end = new Date(start);
   end.setDate(end.getDate() + plan.duration_days);
   const endDate = end.toISOString().split("T")[0];
@@ -70,7 +102,7 @@ export async function createMembership(formData: FormData) {
     .insert({
       member_id: memberId,
       plan_id: planId,
-      start_date: startDate,
+      start_date: effectiveStart,
       end_date: endDate,
       paid_amount: paidAmount,
       notes,
@@ -130,11 +162,12 @@ export async function renewMembership(membershipId: string) {
   if (error || !current) throw new Error("Membresía no encontrada");
 
   const plan = current.membership_plans as unknown as { duration_days: number; name: string; price: number };
-  const baseDate = new Date(current.end_date) > new Date()
-    ? new Date(current.end_date)
-    : new Date();
-  const newStart = baseDate.toISOString().split("T")[0];
-  const newEnd = new Date(baseDate.setDate(baseDate.getDate() + plan.duration_days))
+  const today = new Date().toISOString().split("T")[0];
+  // Si aún está vigente, la renovación arranca el día siguiente al vencimiento
+  // (no pierde días); si ya venció, arranca hoy.
+  const newStart = current.end_date >= today ? dayAfter(current.end_date) : today;
+  const startD = new Date(newStart + "T00:00:00");
+  const newEnd = new Date(startD.setDate(startD.getDate() + plan.duration_days))
     .toISOString()
     .split("T")[0];
 
