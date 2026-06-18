@@ -9,7 +9,7 @@ export default async function MembresiasPage() {
       supabase
         .from("vw_memberships_status")
         .select(
-          "id, member_id, plan_id, start_date, end_date, paid_amount, status, effective_status, days_until_expiry, members(full_name, phone), membership_plans(name, color, duration_days)"
+          "id, member_id, plan_id, start_date, end_date, paid_amount, status, effective_status, days_until_expiry, cancellation_reason, members(full_name, phone), membership_plans(name, color, duration_days)"
         )
         .order("end_date", { ascending: false }),
 
@@ -42,6 +42,7 @@ export default async function MembresiasPage() {
     status: m.status,
     effective_status: m.effective_status,
     days_until_expiry: m.days_until_expiry ?? 0,
+    cancellation_reason: m.cancellation_reason ?? null,
   }));
 
   return (

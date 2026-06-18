@@ -17,7 +17,7 @@ export default async function MiembrosPage() {
       supabase
         .from("vw_members_with_active_membership")
         .select(
-          "id, full_name, phone, email, cedula, birthday, photo_url, gender, emergency_contact_name, emergency_contact_phone, notes, status, created_at, current_plan_name, current_plan_color, current_start_date, current_end_date, membership_status, days_until_expiry, user_id"
+          "id, full_name, phone, email, cedula, birthday, photo_url, gender, emergency_contact_name, emergency_contact_phone, notes, status, created_at, current_membership_id, current_plan_name, current_plan_color, current_start_date, current_end_date, membership_status, days_until_expiry, user_id"
         )
         .order("full_name"),
 

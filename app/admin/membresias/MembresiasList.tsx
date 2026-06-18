@@ -31,6 +31,7 @@ type Membership = {
   status: string;
   effective_status: string;
   days_until_expiry: number;
+  cancellation_reason: string | null;
 };
 
 type Member = { id: string; full_name: string; phone: string };
@@ -166,9 +167,16 @@ function EditMembershipModal({
 
 // ── Row component ──────────────────────────────────────────────────────────────
 
-function MembresiaRow({ m, onEdit }: { m: Membership; onEdit: (m: Membership) => void }) {
+function MembresiaRow({
+  m,
+  onEdit,
+  onCancel,
+}: {
+  m: Membership;
+  onEdit: (m: Membership) => void;
+  onCancel: (m: Membership) => void;
+}) {
   const [renewPending, startRenew] = useTransition();
-  const [cancelPending, startCancel] = useTransition();
   const [freezePending, startFreeze] = useTransition();
 
   return (
@@ -201,6 +209,9 @@ function MembresiaRow({ m, onEdit }: { m: Membership; onEdit: (m: Membership) =>
         >
           {m.plan_name}
         </span>
+        {m.effective_status === "cancelled" && m.cancellation_reason && (
+          <p className="text-fg/40 text-xs mt-1">Motivo: {m.cancellation_reason}</p>
+        )}
       </td>
 
       {/* Cupo (duration_days del plan) */}
@@ -283,20 +294,10 @@ function MembresiaRow({ m, onEdit }: { m: Membership; onEdit: (m: Membership) =>
           )}
           {m.effective_status === "active" && (
             <button
-              disabled={cancelPending}
-              onClick={() =>
-                startCancel(async () => {
-                  try {
-                    await cancelMembership(m.id);
-                    toast.success("Membresía cancelada");
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Error al cancelar");
-                  }
-                })
-              }
-              className="text-xs text-fg/30 hover:text-red-400 border border-line hover:border-red-400/40 px-2.5 py-1 rounded transition-colors disabled:opacity-40"
+              onClick={() => onCancel(m)}
+              className="text-xs text-fg/30 hover:text-red-400 border border-line hover:border-red-400/40 px-2.5 py-1 rounded transition-colors"
             >
-              {cancelPending ? "..." : "Cancelar"}
+              Cancelar
             </button>
           )}
         </div>
@@ -312,11 +313,13 @@ function MembresiaSection({
   rows,
   csvFilename,
   onEdit,
+  onCancel,
 }: {
   title: string;
   rows: Membership[];
   csvFilename: string;
   onEdit: (m: Membership) => void;
+  onCancel: (m: Membership) => void;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -392,7 +395,7 @@ function MembresiaSection({
                 </thead>
                 <tbody>
                   {paged.map((m) => (
-                    <MembresiaRow key={m.id} m={m} onEdit={onEdit} />
+                    <MembresiaRow key={m.id} m={m} onEdit={onEdit} onCancel={onCancel} />
                   ))}
                 </tbody>
               </table>
@@ -448,11 +451,105 @@ function MembresiaSection({
   );
 }
 
+// ── Modal: cancelar membresía con motivo ──────────────────────────────────────
+
+const CANCEL_REASONS = [
+  "Solicitud del socio",
+  "Falta de pago",
+  "Cambio de plan",
+  "Creada por error",
+  "Otro",
+];
+
+function CancelMembershipModal({
+  membership,
+  onClose,
+}: {
+  membership: Membership;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState(CANCEL_REASONS[0]);
+  const [note, setNote] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function handleConfirm() {
+    const finalReason = reason === "Otro" ? note.trim() || "Otro" : reason;
+    startTransition(async () => {
+      try {
+        await cancelMembership(membership.id, finalReason);
+        toast.success("Membresía cancelada");
+        onClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error al cancelar");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+        <div>
+          <h2 className="font-display text-lg uppercase tracking-tight text-red-400">
+            Cancelar membresía
+          </h2>
+          <p className="text-fg/50 text-sm mt-1">
+            <span className="text-fg font-semibold">{membership.full_name}</span> ·{" "}
+            {membership.plan_name} (vence {membership.end_date})
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-fg/50 text-xs uppercase tracking-wider">Motivo</label>
+          <select value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls}>
+            {CANCEL_REASONS.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+
+        {reason === "Otro" && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-fg/50 text-xs uppercase tracking-wider">Detalle</label>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Escribe el motivo..."
+              className={inputCls}
+              autoFocus
+            />
+          </div>
+        )}
+
+        <p className="text-fg/40 text-xs">
+          La membresía pasará a la lista de canceladas. No se elimina: conservas el historial.
+        </p>
+
+        <div className="flex gap-3 justify-end pt-1">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors"
+          >
+            No cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={pending}
+            className="px-5 py-2 text-sm font-semibold bg-red-500/90 hover:bg-red-500 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {pending ? "Cancelando..." : "Sí, cancelar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Root export ────────────────────────────────────────────────────────────────
 
 export default function MembresiasList({ memberships, members, plans }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Membership | null>(null);
+  const [cancelling, setCancelling] = useState<Membership | null>(null);
 
   const expired = memberships.filter((m) => m.effective_status === "expired");
   const active = memberships.filter((m) => m.effective_status === "active");
@@ -484,6 +581,7 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
               rows={expiringSoon}
               csvFilename="membresias_por_vencer.csv"
               onEdit={setEditing}
+              onCancel={setCancelling}
             />
           </div>
         )}
@@ -492,12 +590,14 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
           rows={expired}
           csvFilename="membresias_vencidas.csv"
           onEdit={setEditing}
+          onCancel={setCancelling}
         />
         <MembresiaSection
           title="Lista de Membresías Activas"
           rows={active}
           csvFilename="membresias_activas.csv"
           onEdit={setEditing}
+          onCancel={setCancelling}
         />
         {frozen.length > 0 && (
           <div className="rounded-xl border border-blue-500/25 bg-blue-500/[0.04] p-4">
@@ -506,6 +606,7 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
               rows={frozen}
               csvFilename="membresias_congeladas.csv"
               onEdit={setEditing}
+              onCancel={setCancelling}
             />
           </div>
         )}
@@ -515,6 +616,7 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
             rows={cancelled}
             csvFilename="membresias_canceladas.csv"
             onEdit={setEditing}
+            onCancel={setCancelling}
           />
         )}
       </div>
@@ -522,6 +624,11 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
       {/* Modal editar fechas */}
       {editing && (
         <EditMembershipModal membership={editing} onClose={() => setEditing(null)} />
+      )}
+
+      {/* Modal cancelar con motivo */}
+      {cancelling && (
+        <CancelMembershipModal membership={cancelling} onClose={() => setCancelling(null)} />
       )}
 
       {/* Modal nueva membresía */}

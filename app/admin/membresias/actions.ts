@@ -3,6 +3,33 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+// Devuelve la membresía activa (vigente) del socio, si la tiene. Una membresía
+// cuenta como activa si status='active' y su fecha de fin no ha pasado.
+export async function getActiveMembership(memberId: string) {
+  const supabase = await createClient();
+  const today = new Date().toISOString().split("T")[0];
+  const { data } = await supabase
+    .from("memberships")
+    .select("id, plan_id, start_date, end_date, paid_amount, membership_plans(name, color)")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .gte("end_date", today)
+    .order("end_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  const plan = data.membership_plans as unknown as { name: string; color: string } | null;
+  return {
+    id: data.id as string,
+    plan_id: data.plan_id as string,
+    start_date: data.start_date as string,
+    end_date: data.end_date as string,
+    paid_amount: Number(data.paid_amount),
+    plan_name: plan?.name ?? "—",
+    plan_color: plan?.color ?? "#999",
+  };
+}
+
 export async function createMembership(formData: FormData) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -14,6 +41,14 @@ export async function createMembership(formData: FormData) {
   const paymentMethod = formData.get("payment_method") as string;
   const bankReference = (formData.get("bank_reference") as string) || null;
   const notes = (formData.get("notes") as string) || null;
+
+  // Backstop: un socio no puede tener dos membresías activas a la vez.
+  const existingActive = await getActiveMembership(memberId);
+  if (existingActive) {
+    throw new Error(
+      `Este socio ya tiene una membresía activa (${existingActive.plan_name}, vence ${existingActive.end_date}). Gestiónala desde su ficha para agregar días, cambiar de plan o cancelarla.`
+    );
+  }
 
   // Get plan duration to calculate end_date
   const { data: plan, error: planError } = await supabase
@@ -221,16 +256,143 @@ export async function resumeMembership(membershipId: string) {
   revalidatePath("/admin");
 }
 
-export async function cancelMembership(membershipId: string) {
+export async function cancelMembership(membershipId: string, reason?: string) {
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("memberships")
-    .update({ status: "cancelled" })
+    .update({
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+      cancellation_reason: reason?.trim() || null,
+    })
     .eq("id", membershipId);
 
   if (error) throw new Error(error.message);
   revalidatePath("/admin/membresias");
+  revalidatePath("/admin/miembros");
+  revalidatePath("/admin");
+}
+
+// ── Ajustar días de una membresía activa (agregar o restar) ────────────────────
+
+export async function adjustMembershipDays(membershipId: string, days: number) {
+  const supabase = await createClient();
+
+  if (!Number.isFinite(days) || days === 0) {
+    throw new Error("Indica cuántos días agregar o restar");
+  }
+
+  const { data: current, error: readError } = await supabase
+    .from("memberships")
+    .select("start_date, end_date, status")
+    .eq("id", membershipId)
+    .single();
+
+  if (readError || !current) throw new Error("Membresía no encontrada");
+
+  const end = new Date(current.end_date + "T00:00:00");
+  end.setDate(end.getDate() + days);
+
+  // La nueva fecha de fin no puede quedar antes del inicio.
+  if (end < new Date(current.start_date + "T00:00:00")) {
+    throw new Error("No puedes restar tantos días: la fecha de fin quedaría antes del inicio");
+  }
+
+  const { error } = await supabase
+    .from("memberships")
+    .update({ end_date: end.toISOString().split("T")[0] })
+    .eq("id", membershipId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/membresias");
+  revalidatePath("/admin/miembros");
+  revalidatePath("/admin");
+}
+
+// ── Cambiar de plan: cancela la actual y crea una nueva con el nuevo plan ───────
+
+export async function changeMembershipPlan(currentMembershipId: string, formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const memberId = formData.get("member_id") as string;
+  const newPlanId = formData.get("plan_id") as string;
+  const paidAmount = parseFloat(formData.get("paid_amount") as string) || 0;
+  const paymentMethod = (formData.get("payment_method") as string) || "cash";
+  const bankReference = (formData.get("bank_reference") as string) || null;
+
+  const { data: plan, error: planError } = await supabase
+    .from("membership_plans")
+    .select("duration_days, name")
+    .eq("id", newPlanId)
+    .single();
+  if (planError || !plan) throw new Error("Plan no encontrado");
+
+  // 1. Cancelar la membresía actual (motivo: cambio de plan)
+  const { error: cancelError } = await supabase
+    .from("memberships")
+    .update({
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+      cancellation_reason: "Cambio de plan",
+    })
+    .eq("id", currentMembershipId);
+  if (cancelError) throw new Error(cancelError.message);
+
+  // 2. Crear la nueva membresía desde hoy
+  const startDate = new Date().toISOString().split("T")[0];
+  const end = new Date(startDate + "T00:00:00");
+  end.setDate(end.getDate() + plan.duration_days);
+  const endDate = end.toISOString().split("T")[0];
+
+  const { data: membership, error: mError } = await supabase
+    .from("memberships")
+    .insert({
+      member_id: memberId,
+      plan_id: newPlanId,
+      start_date: startDate,
+      end_date: endDate,
+      paid_amount: paidAmount,
+      notes: "Cambio de plan",
+      created_by: user?.id,
+    })
+    .select("id")
+    .single();
+  if (mError || !membership) throw new Error(mError?.message ?? "Error al crear la nueva membresía");
+
+  // 3. Registrar la venta del nuevo plan (si hubo cobro)
+  if (paidAmount > 0) {
+    const { data: sale } = await supabase
+      .from("sales")
+      .insert({
+        member_id: memberId,
+        sale_date: startDate,
+        total: paidAmount,
+        payment_method: paymentMethod,
+        bank_reference: bankReference,
+        notes: `Cambio de plan: ${plan.name}`,
+        created_by: user?.id,
+      })
+      .select("id")
+      .single();
+
+    if (sale) {
+      await supabase.from("sale_items").insert({
+        sale_id: sale.id,
+        item_type: "membership",
+        membership_id: membership.id,
+        description: `${plan.name} (${plan.duration_days} días) — Cambio de plan`,
+        quantity: 1,
+        unit_price: paidAmount,
+      });
+    }
+  }
+
+  revalidatePath("/admin/membresias");
+  revalidatePath("/admin/ventas");
+  revalidatePath("/admin/miembros");
+  revalidatePath("/admin");
 }
 
 // ── Editar fechas de una membresía existente ───────────────────────────────────

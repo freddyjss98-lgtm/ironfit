@@ -5,7 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
 import { archiveMember, restoreMember } from "./actions";
-import { createMembership } from "../membresias/actions";
+import {
+  createMembership,
+  adjustMembershipDays,
+  changeMembershipPlan,
+  cancelMembership,
+} from "../membresias/actions";
 import MemberForm from "./MemberForm";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -24,6 +29,7 @@ type Member = {
   notes: string | null;
   status: string;
   created_at: string;
+  current_membership_id: string | null;
   current_plan_name: string | null;
   current_plan_color: string | null;
   current_start_date: string | null;
@@ -397,9 +403,38 @@ function PlanInline({ member, onAssign }: { member: Member; onAssign: () => void
   );
 }
 
-// ── Modal: asignar / cambiar membresía ─────────────────────────────────────────
+// ── Modal: asignar / gestionar membresía ───────────────────────────────────────
+
+const fieldCls =
+  "w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors";
+const labelMini = "text-fg/50 text-xs uppercase tracking-wider";
+const CANCEL_REASONS = [
+  "Solicitud del socio",
+  "Falta de pago",
+  "Creada por error",
+  "Otro",
+];
 
 function AssignPlanModal({
+  member,
+  plans,
+  onClose,
+}: {
+  member: Member;
+  plans: Plan[];
+  onClose: () => void;
+}) {
+  const hasActive =
+    member.membership_status === "active" && !!member.current_membership_id;
+
+  if (hasActive) {
+    return <ManageMembershipPanel member={member} plans={plans} onClose={onClose} />;
+  }
+  return <AssignNewPanel member={member} plans={plans} onClose={onClose} />;
+}
+
+// Asignar una membresía nueva (el socio no tiene ninguna activa)
+function AssignNewPanel({
   member,
   plans,
   onClose,
@@ -413,11 +448,6 @@ function AssignPlanModal({
   const [amount, setAmount] = useState(String(plans[0]?.price ?? ""));
   const [method, setMethod] = useState("cash");
   const [pending, startTransition] = useTransition();
-
-  const fieldCls =
-    "w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors";
-  const labelMini = "text-fg/50 text-xs uppercase tracking-wider";
-  const hasPlan = member.membership_status === "active" && member.current_plan_name;
 
   function handlePlan(id: string) {
     setPlanId(id);
@@ -439,7 +469,7 @@ function AssignPlanModal({
         fd.set("paid_amount", amount || "0");
         fd.set("payment_method", method);
         await createMembership(fd);
-        toast.success(hasPlan ? "Membresía actualizada" : "Membresía asignada");
+        toast.success("Membresía asignada");
         onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al asignar");
@@ -451,12 +481,8 @@ function AssignPlanModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="font-display text-lg uppercase tracking-tight">
-            {hasPlan ? "Cambiar membresía" : "Asignar membresía"}
-          </h2>
-          <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">
-            ✕
-          </button>
+          <h2 className="font-display text-lg uppercase tracking-tight">Asignar membresía</h2>
+          <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">✕</button>
         </div>
         <p className="text-fg/40 text-xs mb-5">{member.full_name}</p>
 
@@ -479,22 +505,11 @@ function AssignPlanModal({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <label className={labelMini}>Inicio</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className={fieldCls}
-                />
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={fieldCls} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className={labelMini}>Monto pagado</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className={fieldCls}
-                />
+                <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={fieldCls} />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -510,10 +525,7 @@ function AssignPlanModal({
         )}
 
         <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-line">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors"
-          >
+          <button onClick={onClose} className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors">
             Cancelar
           </button>
           <button
@@ -521,10 +533,235 @@ function AssignPlanModal({
             disabled={pending || plans.length === 0}
             className="px-5 py-2 text-sm font-semibold bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors disabled:opacity-50"
           >
-            {pending ? "Guardando..." : hasPlan ? "Actualizar" : "Asignar"}
+            {pending ? "Guardando..." : "Asignar"}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Gestionar la membresía activa del socio: agregar/restar días, cambiar plan o cancelar
+type ManageMode = "menu" | "add" | "subtract" | "change" | "cancel";
+
+function ManageMembershipPanel({
+  member,
+  plans,
+  onClose,
+}: {
+  member: Member;
+  plans: Plan[];
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<ManageMode>("menu");
+  const [days, setDays] = useState("");
+  const [planId, setPlanId] = useState(plans[0]?.id ?? "");
+  const [amount, setAmount] = useState(String(plans[0]?.price ?? ""));
+  const [method, setMethod] = useState("cash");
+  const [reason, setReason] = useState(CANCEL_REASONS[0]);
+  const [note, setNote] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const membershipId = member.current_membership_id!;
+  const color = member.current_plan_color ?? "#e84b1f";
+
+  function handlePlan(id: string) {
+    setPlanId(id);
+    const p = plans.find((pl) => pl.id === id);
+    if (p) setAmount(String(p.price));
+  }
+
+  function run(fn: () => Promise<void>, okMsg: string) {
+    startTransition(async () => {
+      try {
+        await fn();
+        toast.success(okMsg);
+        onClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error");
+      }
+    });
+  }
+
+  function handleAdjust(sign: 1 | -1) {
+    const n = parseInt(days, 10);
+    if (!n || n <= 0) {
+      toast.error("Indica cuántos días");
+      return;
+    }
+    run(
+      () => adjustMembershipDays(membershipId, sign * n),
+      sign > 0 ? `Se agregaron ${n} días` : `Se restaron ${n} días`
+    );
+  }
+
+  function handleChangePlan() {
+    if (!planId) {
+      toast.error("Selecciona un plan");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("member_id", member.id);
+    fd.set("plan_id", planId);
+    fd.set("paid_amount", amount || "0");
+    fd.set("payment_method", method);
+    run(() => changeMembershipPlan(membershipId, fd), "Plan cambiado");
+  }
+
+  function handleCancel() {
+    const finalReason = reason === "Otro" ? note.trim() || "Otro" : reason;
+    run(() => cancelMembership(membershipId, finalReason), "Membresía cancelada");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-display text-lg uppercase tracking-tight">Gestionar membresía</h2>
+          <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">✕</button>
+        </div>
+        <p className="text-fg/40 text-xs mb-4">{member.full_name}</p>
+
+        {/* Membresía activa actual */}
+        <div className="rounded-xl border border-line bg-white/5 px-4 py-3 mb-5">
+          <p className="text-fg/40 text-xs uppercase tracking-wider">Membresía activa</p>
+          <div className="flex items-center justify-between mt-1">
+            <span
+              className="inline-flex items-center text-xs px-2 py-0.5 rounded-full border font-medium"
+              style={{ backgroundColor: color + "22", borderColor: color + "55", color }}
+            >
+              {member.current_plan_name}
+            </span>
+            <span className="text-fg/50 text-xs">
+              vence {formatDateShort(member.current_end_date)}
+              {typeof member.days_until_expiry === "number" && (
+                <span className="text-fg/30"> · {member.days_until_expiry}d</span>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {mode === "menu" && (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setMode("add")} className="text-sm border border-line hover:border-emerald-500/40 hover:text-emerald-400 rounded-xl py-3 transition-colors">
+              ➕ Agregar días
+            </button>
+            <button onClick={() => setMode("subtract")} className="text-sm border border-line hover:border-amber-500/40 hover:text-amber-400 rounded-xl py-3 transition-colors">
+              ➖ Restar días
+            </button>
+            <button onClick={() => setMode("change")} className="text-sm border border-line hover:border-accent/40 hover:text-accent rounded-xl py-3 transition-colors">
+              🔄 Cambiar de plan
+            </button>
+            <button onClick={() => setMode("cancel")} className="text-sm border border-line hover:border-red-500/40 hover:text-red-400 rounded-xl py-3 transition-colors">
+              🗑 Eliminar membresía
+            </button>
+          </div>
+        )}
+
+        {(mode === "add" || mode === "subtract") && (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelMini}>{mode === "add" ? "Días a agregar" : "Días a restar"}</label>
+              <input
+                type="number"
+                min={1}
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                className={fieldCls}
+                placeholder="Ej. 7"
+                autoFocus
+              />
+              <p className="text-fg/35 text-xs">
+                Ajusta la fecha de fin sin registrar un cobro (cortesía o corrección).
+              </p>
+            </div>
+            <ModeFooter
+              onBack={() => setMode("menu")}
+              onConfirm={() => handleAdjust(mode === "add" ? 1 : -1)}
+              pending={pending}
+              label={mode === "add" ? "Agregar" : "Restar"}
+            />
+          </div>
+        )}
+
+        {mode === "change" && (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelMini}>Nuevo plan</label>
+              <select value={planId} onChange={(e) => handlePlan(e.target.value)} className={fieldCls}>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} — ${p.price} ({p.duration_days}d)</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className={labelMini}>Monto pagado</label>
+                <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={fieldCls} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelMini}>Método</label>
+                <select value={method} onChange={(e) => setMethod(e.target.value)} className={fieldCls}>
+                  <option value="cash">Efectivo</option>
+                  <option value="transfer">Transferencia</option>
+                  <option value="card">Tarjeta</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-fg/35 text-xs">
+              Cancela la membresía actual y crea una nueva con el plan elegido, desde hoy.
+            </p>
+            <ModeFooter onBack={() => setMode("menu")} onConfirm={handleChangePlan} pending={pending} label="Cambiar plan" />
+          </div>
+        )}
+
+        {mode === "cancel" && (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelMini}>Motivo</label>
+              <select value={reason} onChange={(e) => setReason(e.target.value)} className={fieldCls}>
+                {CANCEL_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            {reason === "Otro" && (
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Detalle del motivo..." className={fieldCls} autoFocus />
+            )}
+            <ModeFooter onBack={() => setMode("menu")} onConfirm={handleCancel} pending={pending} label="Eliminar membresía" danger />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModeFooter({
+  onBack,
+  onConfirm,
+  pending,
+  label,
+  danger,
+}: {
+  onBack: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+  label: string;
+  danger?: boolean;
+}) {
+  return (
+    <div className="flex gap-3 justify-end pt-3 border-t border-line">
+      <button onClick={onBack} className="px-4 py-2 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors">
+        Atrás
+      </button>
+      <button
+        onClick={onConfirm}
+        disabled={pending}
+        className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 text-white ${
+          danger ? "bg-red-500/90 hover:bg-red-500" : "bg-accent hover:bg-accent/80"
+        }`}
+      >
+        {pending ? "..." : label}
+      </button>
     </div>
   );
 }
