@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/browser";
 import {
-  createPlan, updatePlan, deletePlan, togglePlanActive,
+  createPlan, updatePlan, deletePlan, togglePlanActive, setPlanMemberAccess,
   createProduct, updateProduct, deleteProduct, toggleProductActive, adjustStock,
 } from "./actions";
 
@@ -21,7 +21,10 @@ type Plan = {
   active: boolean;
   image_url: string | null;
   iva_rate: number;
+  is_exclusive: boolean;
 };
+
+type MemberLite = { id: string; full_name: string };
 
 type Product = {
   id: string;
@@ -35,7 +38,12 @@ type Product = {
   iva_rate: number;
 };
 
-type Props = { plans: Plan[]; products: Product[] };
+type Props = {
+  plans: Plan[];
+  products: Product[];
+  members: MemberLite[];
+  planAccess: Record<string, string[]>;
+};
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -173,20 +181,55 @@ function EstadoBadge({ active }: { active: boolean }) {
 
 // ── Plan Form ──────────────────────────────────────────────────────────────────
 
-function PlanForm({ plan, onClose }: { plan?: Plan; onClose: () => void }) {
+function PlanForm({
+  plan,
+  members,
+  currentAccess,
+  onClose,
+}: {
+  plan?: Plan;
+  members: MemberLite[];
+  currentAccess: string[];
+  onClose: () => void;
+}) {
   const [imageUrl, setImageUrl] = useState<string | null>(plan?.image_url ?? null);
+  const [isExclusive, setIsExclusive] = useState(plan?.is_exclusive ?? false);
+  const [selected, setSelected] = useState<Set<string>>(new Set(currentAccess));
+  const [memberSearch, setMemberSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const filteredMembers = members.filter((m) =>
+    m.full_name.toLowerCase().includes(memberSearch.toLowerCase())
+  );
+
+  function toggleMember(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     if (imageUrl) fd.set("image_url", imageUrl);
+    fd.set("is_exclusive", isExclusive ? "true" : "false");
     setError(null);
     startTransition(async () => {
       try {
-        if (plan) await updatePlan(plan.id, fd);
-        else await createPlan(fd);
+        const memberIds = isExclusive ? [...selected] : [];
+        let planId: string;
+        if (plan) {
+          await updatePlan(plan.id, fd);
+          planId = plan.id;
+        } else {
+          const res = await createPlan(fd);
+          planId = res.id;
+        }
+        await setPlanMemberAccess(planId, memberIds);
         toast.success(plan ? "Plan actualizado" : "Plan creado");
         onClose();
       } catch (err) {
@@ -246,6 +289,73 @@ function PlanForm({ plan, onClose }: { plan?: Plan; onClose: () => void }) {
           <label className={labelCls}>Foto del plan</label>
           <PhotoUpload current={plan?.image_url ?? null} onChange={setImageUrl} />
         </div>
+      </div>
+
+      {/* Plan exclusivo */}
+      <div className="rounded-xl border border-line bg-white/[0.02] p-4 space-y-3">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isExclusive}
+            onChange={(e) => setIsExclusive(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-accent shrink-0"
+          />
+          <span className="text-sm">
+            <span className="font-medium text-fg">Plan exclusivo</span>
+            <span className="block text-fg/45 text-xs mt-0.5">
+              No aparece en el portal de renovación para el público. Sólo lo verán los
+              socios que selecciones aquí (el admin siempre puede asignarlo manualmente).
+            </span>
+          </span>
+        </label>
+
+        {isExclusive && (
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <label className={labelCls}>Socios con acceso ({selected.size})</label>
+              {selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="text-xs text-fg/40 hover:text-fg underline"
+                >
+                  Quitar todos
+                </button>
+              )}
+            </div>
+            <input
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              placeholder="Buscar socio..."
+              className={inputCls}
+            />
+            <div className="max-h-52 overflow-y-auto flex flex-col gap-1 pr-1 border border-line/40 rounded-lg p-2">
+              {filteredMembers.length === 0 ? (
+                <p className="text-fg/30 text-xs text-center py-3">Sin resultados</p>
+              ) : (
+                filteredMembers.map((m) => (
+                  <label
+                    key={m.id}
+                    className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(m.id)}
+                      onChange={() => toggleMember(m.id)}
+                      className="h-4 w-4 accent-accent shrink-0"
+                    />
+                    <span className="text-sm truncate">{m.full_name}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            {selected.size === 0 && (
+              <p className="text-amber-400/70 text-xs">
+                Si no eliges a nadie, este plan no será visible para ningún socio en el portal.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3 justify-end pt-2">
@@ -374,7 +484,15 @@ function useDelete(action: (id: string) => Promise<void>, successMsg: string) {
 
 // ── Planes section ─────────────────────────────────────────────────────────────
 
-function PlanesSection({ plans }: { plans: Plan[] }) {
+function PlanesSection({
+  plans,
+  members,
+  planAccess,
+}: {
+  plans: Plan[];
+  members: MemberLite[];
+  planAccess: Record<string, string[]>;
+}) {
   const [showForm, setShowForm] = useState(false);
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [search, setSearch] = useState("");
@@ -430,7 +548,12 @@ function PlanesSection({ plans }: { plans: Plan[] }) {
           <h4 className="font-semibold text-sm mb-4">
             {editPlan ? `Editar — ${editPlan.name}` : "Crear Nuevo Plan"}
           </h4>
-          <PlanForm plan={editPlan ?? undefined} onClose={closeForm} />
+          <PlanForm
+            plan={editPlan ?? undefined}
+            members={members}
+            currentAccess={editPlan ? (planAccess[editPlan.id] ?? []) : []}
+            onClose={closeForm}
+          />
         </div>
       )}
 
@@ -474,6 +597,11 @@ function PlanesSection({ plans }: { plans: Plan[] }) {
                           )}
                           <div>
                             <span className="font-semibold text-fg">{plan.name}</span>
+                            {plan.is_exclusive && (
+                              <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25 align-middle">
+                                ★ Exclusiva
+                              </span>
+                            )}
                             <p className="text-xs text-fg/40">IVA {plan.iva_rate}%</p>
                           </div>
                         </div>
@@ -756,11 +884,11 @@ function ProductosSection({ products }: { products: Product[] }) {
 
 // ── Root export ────────────────────────────────────────────────────────────────
 
-export default function ProductosClient({ plans, products }: Props) {
+export default function ProductosClient({ plans, products, members, planAccess }: Props) {
   return (
     <div className="space-y-12">
       {/* Divider top */}
-      <PlanesSection plans={plans} />
+      <PlanesSection plans={plans} members={members} planAccess={planAccess} />
 
       <div className="border-t border-line/40 pt-8">
         <ProductosSection products={products} />

@@ -7,24 +7,31 @@ function revalidate() {
   revalidatePath("/admin/productos");
   revalidatePath("/admin/planes");  // keeps old route fresh too
   revalidatePath("/admin/tienda");
+  revalidatePath("/portal/renovar");
 }
 
 // ── Planes de Membresía ────────────────────────────────────────────────────────
 
-export async function createPlan(formData: FormData) {
+export async function createPlan(formData: FormData): Promise<{ id: string }> {
   const supabase = await createClient();
-  const { error } = await supabase.from("membership_plans").insert({
-    name: formData.get("name") as string,
-    description: (formData.get("description") as string) || null,
-    price: parseFloat(formData.get("price") as string),
-    duration_days: parseInt(formData.get("duration_days") as string, 10),
-    color: (formData.get("color") as string) || "#e84b1f",
-    iva_rate: parseFloat((formData.get("iva_rate") as string) || "15"),
-    image_url: (formData.get("image_url") as string) || null,
-    active: true,
-  });
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase
+    .from("membership_plans")
+    .insert({
+      name: formData.get("name") as string,
+      description: (formData.get("description") as string) || null,
+      price: parseFloat(formData.get("price") as string),
+      duration_days: parseInt(formData.get("duration_days") as string, 10),
+      color: (formData.get("color") as string) || "#e84b1f",
+      iva_rate: parseFloat((formData.get("iva_rate") as string) || "15"),
+      image_url: (formData.get("image_url") as string) || null,
+      is_exclusive: formData.get("is_exclusive") === "true",
+      active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Error al crear el plan");
   revalidate();
+  return { id: data.id as string };
 }
 
 export async function updatePlan(id: string, formData: FormData) {
@@ -39,9 +46,28 @@ export async function updatePlan(id: string, formData: FormData) {
       color: (formData.get("color") as string) || "#e84b1f",
       iva_rate: parseFloat((formData.get("iva_rate") as string) || "15"),
       image_url: (formData.get("image_url") as string) || null,
+      is_exclusive: formData.get("is_exclusive") === "true",
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
+  revalidate();
+}
+
+// Reemplaza la lista de socios con acceso a un plan exclusivo.
+export async function setPlanMemberAccess(planId: string, memberIds: string[]) {
+  const supabase = await createClient();
+
+  const { error: delErr } = await supabase
+    .from("plan_member_access")
+    .delete()
+    .eq("plan_id", planId);
+  if (delErr) throw new Error(delErr.message);
+
+  if (memberIds.length > 0) {
+    const rows = memberIds.map((m) => ({ plan_id: planId, member_id: m }));
+    const { error } = await supabase.from("plan_member_access").insert(rows);
+    if (error) throw new Error(error.message);
+  }
   revalidate();
 }
 

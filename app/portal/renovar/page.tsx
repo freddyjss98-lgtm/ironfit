@@ -47,11 +47,11 @@ export default async function PortalRenovarPage() {
         .maybeSingle()
     : { data: null };
 
-  const [{ data: plans }, { data: bank }, { data: sales }, { data: pendingReq }] =
+  const [{ data: plans }, { data: bank }, { data: sales }, { data: pendingReq }, { data: myAccess }] =
     await Promise.all([
       supabase
         .from("membership_plans")
-        .select("id, name, price, duration_days, color")
+        .select("id, name, price, duration_days, color, is_exclusive")
         .eq("active", true)
         .order("sort_order"),
       supabase
@@ -76,7 +76,16 @@ export default async function PortalRenovarPage() {
             .limit(1)
             .maybeSingle()
         : Promise.resolve({ data: null }),
+      member
+        ? supabase.from("plan_member_access").select("plan_id").eq("member_id", member.id)
+        : Promise.resolve({ data: [] as { plan_id: string }[] }),
     ]);
+
+  // Planes visibles para el socio: públicos + exclusivos donde está autorizado.
+  const allowedExclusive = new Set((myAccess ?? []).map((a) => a.plan_id as string));
+  const visiblePlans = (plans ?? []).filter(
+    (p) => !p.is_exclusive || allowedExclusive.has(p.id as string)
+  );
 
   const plan = membership?.membership_plans as unknown as { name: string; price: number } | null;
   const isExpired = !membership || membership.effective_status === "expired";
@@ -147,7 +156,7 @@ export default async function PortalRenovarPage() {
 
         {/* Flujo de renovación */}
         <RenewForm
-          plans={(plans ?? []).map((p) => ({
+          plans={visiblePlans.map((p) => ({
             id: p.id as string,
             name: p.name as string,
             price: Number(p.price),
