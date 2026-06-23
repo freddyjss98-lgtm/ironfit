@@ -1,6 +1,8 @@
 // Validación de cédula ecuatoriana (algoritmo Módulo 10).
-// 10 dígitos: 2 de provincia (01–24, ó 30 = exterior), tercer dígito < 6 para
-// persona natural, y un dígito verificador final que detecta números alterados.
+// 10 dígitos: 2 de provincia (01–24, ó 30 = exterior) + un dígito verificador
+// final que detecta números alterados. No se valida el tercer dígito: la regla
+// "< 6 para persona natural" produce falsos rechazos de cédulas reales, y el
+// dígito verificador ya garantiza la integridad del número.
 
 const COEF = [2, 1, 2, 1, 2, 1, 2, 1, 2];
 
@@ -15,9 +17,6 @@ export function isValidCedula(raw: string): boolean {
 
   const provincia = parseInt(cedula.slice(0, 2), 10);
   if ((provincia < 1 || provincia > 24) && provincia !== 30) return false;
-
-  const tercer = parseInt(cedula[2], 10);
-  if (tercer > 5) return false;
 
   let suma = 0;
   for (let i = 0; i < 9; i++) {
