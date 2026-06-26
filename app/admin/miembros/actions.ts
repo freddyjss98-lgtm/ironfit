@@ -3,13 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { isValidCedula, normalizeCedula } from "@/lib/cedula";
+import type { ActionResult } from "@/lib/result";
 
-export async function createMember(formData: FormData) {
+export async function createMember(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
 
   const cedula = normalizeCedula((formData.get("cedula") as string) || "");
-  if (!cedula) throw new Error("La cédula es obligatoria");
-  if (!isValidCedula(cedula)) throw new Error("La cédula ingresada no es válida");
+  if (!cedula) return { ok: false, error: "La cédula es obligatoria" };
+  if (!isValidCedula(cedula)) return { ok: false, error: "La cédula ingresada no es válida" };
 
   const { error } = await supabase.from("members").insert({
     full_name: formData.get("full_name") as string,
@@ -25,13 +26,14 @@ export async function createMember(formData: FormData) {
   });
 
   if (error) {
-    if (error.code === "23505") throw new Error("Esa cédula ya está registrada");
-    throw new Error(error.message);
+    if (error.code === "23505") return { ok: false, error: "Esa cédula ya está registrada en otro socio" };
+    return { ok: false, error: error.message };
   }
   revalidatePath("/admin/miembros");
+  return { ok: true };
 }
 
-export async function updateMember(id: string, formData: FormData) {
+export async function updateMember(id: string, formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -49,8 +51,9 @@ export async function updateMember(id: string, formData: FormData) {
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/miembros");
+  return { ok: true };
 }
 
 export async function toggleMemberStatus(id: string, currentStatus: string) {

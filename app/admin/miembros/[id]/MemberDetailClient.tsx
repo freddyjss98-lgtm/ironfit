@@ -116,7 +116,8 @@ function EditMemberModal({ member, onClose }: { member: Member; onClose: () => v
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       try {
-        await updateMemberFull(member.id, fd);
+        const res = await updateMemberFull(member.id, fd);
+        if (!res.ok) { setError(res.error); return; }
         toast.success("Miembro actualizado");
         onClose();
       } catch (err) {
@@ -408,16 +409,13 @@ export default function MemberDetailClient({
                           onClick={() => {
                             setShowRoleMenu(false);
                             startPromoteAdmin(async () => {
-                              try {
-                                await promoteToAdmin(member.id, {
-                                  user_id: member.user_id,
-                                  full_name: member.full_name,
-                                  email: member.email,
-                                });
-                                toast.success(`${member.full_name} es ahora Administrador`);
-                              } catch (err) {
-                                toast.error(err instanceof Error ? err.message : "Error");
-                              }
+                              const res = await promoteToAdmin(member.id, {
+                                user_id: member.user_id,
+                                full_name: member.full_name,
+                                email: member.email,
+                              });
+                              if (!res.ok) { toast.error(res.error); return; }
+                              toast.success(`${member.full_name} es ahora Administrador`);
                             });
                           }}
                           disabled={promotingAdmin}
@@ -434,12 +432,9 @@ export default function MemberDetailClient({
                           onClick={() => {
                             setShowRoleMenu(false);
                             startDemote(async () => {
-                              try {
-                                await demoteToMember(member.id, member.user_id!);
-                                toast.success(`Permisos de ${memberRole} removidos. Ahora es usuario del portal.`);
-                              } catch (err) {
-                                toast.error(err instanceof Error ? err.message : "Error");
-                              }
+                              const res = await demoteToMember(member.id, member.user_id!);
+                              if (!res.ok) { toast.error(res.error); return; }
+                              toast.success(`Permisos de ${memberRole} removidos. Ahora es usuario del portal.`);
                             });
                           }}
                           disabled={demoting}
@@ -564,13 +559,10 @@ function PortalAccessCard({ member }: { member: Member }) {
   function handleReset() {
     if (!member.user_id) return;
     startTransition(async () => {
-      try {
-        const { tempPassword } = await resetMemberPassword(member.id, member.user_id!);
-        setCreds({ email: member.email ?? "", tempPassword });
-        toast.success("Contraseña reseteada");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al resetear");
-      }
+      const res = await resetMemberPassword(member.id, member.user_id!);
+      if (!res.ok) { toast.error(res.error); return; }
+      setCreds({ email: member.email ?? "", tempPassword: res.tempPassword });
+      toast.success("Contraseña reseteada");
     });
   }
 
@@ -672,13 +664,10 @@ function CreateAccessModal({
       return;
     }
     startTransition(async () => {
-      try {
-        const creds = await createMemberAccess(member.id, email.trim(), member.full_name);
-        toast.success("Acceso creado");
-        onCreated(creds);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al crear acceso");
-      }
+      const res = await createMemberAccess(member.id, email.trim(), member.full_name);
+      if (!res.ok) { setError(res.error); return; }
+      toast.success("Acceso creado");
+      onCreated(res.credentials);
     });
   }
 
@@ -735,13 +724,10 @@ function ConfirmRevokeModal({
 
   function handle() {
     startTransition(async () => {
-      try {
-        await revokeMemberAccess(memberId, userId);
-        toast.success("Acceso revocado");
-        onClose();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al revocar");
-      }
+      const res = await revokeMemberAccess(memberId, userId);
+      if (!res.ok) { toast.error(res.error); return; }
+      toast.success("Acceso revocado");
+      onClose();
     });
   }
 

@@ -62,16 +62,19 @@ export default function MemberForm({ member, onClose }: Props) {
         fd.set("photo_url", photoUrl);
 
         if (member) {
-          await updateMember(member.id, fd);
+          const res = await updateMember(member.id, fd);
+          if (!res.ok) { setError(res.error); return; }
           onClose();
         } else if (createAccess) {
-          const creds = await createMemberWithAccess(fd);
+          const res = await createMemberWithAccess(fd);
+          if (!res.ok) { setError(res.error); return; }
           // No cerramos: mostramos las credenciales una sola vez.
           setCreatedPhone((fd.get("phone") as string) ?? "");
           setCreatedName((fd.get("full_name") as string) ?? "");
-          setCredentials(creds);
+          setCredentials(res.credentials);
         } else {
-          await createMember(fd);
+          const res = await createMember(fd);
+          if (!res.ok) { setError(res.error); return; }
           formRef.current?.reset();
           onClose();
         }

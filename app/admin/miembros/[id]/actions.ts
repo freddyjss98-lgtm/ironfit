@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { isValidCedula, normalizeCedula } from "@/lib/cedula";
+import type { ActionResult } from "@/lib/result";
 
 async function assertAdmin() {
   const supabase = await createClient();
@@ -22,14 +23,14 @@ async function assertAdmin() {
 
 // ── Edición completa del miembro (todos los campos) ───────────────────────────
 
-export async function updateMemberFull(memberId: string, formData: FormData) {
+export async function updateMemberFull(memberId: string, formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
 
   // Cédula opcional al editar (los socios antiguos no la tienen), pero si se
   // ingresa debe ser válida.
   const cedulaRaw = normalizeCedula((formData.get("cedula") as string) || "");
   if (cedulaRaw && !isValidCedula(cedulaRaw)) {
-    throw new Error("La cédula ingresada no es válida");
+    return { ok: false, error: "La cédula ingresada no es válida" };
   }
 
   const { error } = await supabase
@@ -51,11 +52,12 @@ export async function updateMemberFull(memberId: string, formData: FormData) {
     .eq("id", memberId);
 
   if (error) {
-    if (error.code === "23505") throw new Error("Esa cédula ya está registrada");
-    throw new Error(error.message);
+    if (error.code === "23505") return { ok: false, error: "Esa cédula ya está registrada en otro socio" };
+    return { ok: false, error: error.message };
   }
   revalidatePath(`/admin/miembros/${memberId}`);
   revalidatePath("/admin/miembros");
+  return { ok: true };
 }
 
 // ── Cambiar rol: promover a Coach ──────────────────────────────────────────────
@@ -104,20 +106,25 @@ export async function promoteToCoach(memberId: string, data: {
 
 // ── Quitar permisos: vuelve a ser usuario del portal sin rol de staff ──────────
 
-export async function demoteToMember(memberId: string, userId: string) {
-  await assertAdmin();
-  const admin = createAdminClient();
+export async function demoteToMember(memberId: string, userId: string): Promise<ActionResult> {
+  try {
+    await assertAdmin();
+    const admin = createAdminClient();
 
-  // Borrar el perfil (quita acceso al panel)
-  const { error } = await admin.from("profiles").delete().eq("id", userId);
-  if (error) throw new Error(error.message);
+    // Borrar el perfil (quita acceso al panel)
+    const { error } = await admin.from("profiles").delete().eq("id", userId);
+    if (error) return { ok: false, error: error.message };
 
-  // Desvincular el user_id del registro de coaches (si existe)
-  await admin.from("coaches").update({ user_id: null }).eq("user_id", userId);
+    // Desvincular el user_id del registro de coaches (si existe)
+    await admin.from("coaches").update({ user_id: null }).eq("user_id", userId);
 
-  revalidatePath(`/admin/miembros/${memberId}`);
-  revalidatePath("/admin/miembros");
-  revalidatePath("/admin/coaches");
+    revalidatePath(`/admin/miembros/${memberId}`);
+    revalidatePath("/admin/miembros");
+    revalidatePath("/admin/coaches");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error inesperado" };
+  }
 }
 
 // ── Cambiar rol: promover a Admin ──────────────────────────────────────────────
@@ -126,26 +133,32 @@ export async function promoteToAdmin(memberId: string, data: {
   user_id: string | null;
   full_name: string;
   email: string | null;
-}) {
-  if (!data.user_id) {
-    throw new Error(
-      "El miembro no tiene acceso al panel. Primero créale el acceso en la tarjeta 'Acceso al portal'."
-    );
+}): Promise<ActionResult> {
+  try {
+    if (!data.user_id) {
+      return {
+        ok: false,
+        error: "El miembro no tiene acceso al panel. Primero créale el acceso en la tarjeta 'Acceso al portal'.",
+      };
+    }
+
+    await assertAdmin();
+
+    // Service role: la RLS de profiles solo permite el perfil propio.
+    const admin = createAdminClient();
+    const { error } = await admin.from("profiles").upsert({
+      id: data.user_id,
+      full_name: data.full_name,
+      email: data.email,
+      role: "admin",
+    });
+
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/admin/miembros/${memberId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error inesperado" };
   }
-
-  await assertAdmin();
-
-  // Service role: la RLS de profiles solo permite el perfil propio.
-  const admin = createAdminClient();
-  const { error } = await admin.from("profiles").upsert({
-    id: data.user_id,
-    full_name: data.full_name,
-    email: data.email,
-    role: "admin",
-  });
-
-  if (error) throw new Error(error.message);
-  revalidatePath(`/admin/miembros/${memberId}`);
 }
 
 export async function addProgress(memberId: string, formData: FormData) {
