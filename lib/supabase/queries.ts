@@ -1,12 +1,12 @@
 import { createClient } from "./server";
+import { todayInEcuador, addDays } from "@/lib/date";
 
 export async function getDashboardStats() {
   const supabase = await createClient();
 
-  const today = new Date().toISOString().split("T")[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const today = todayInEcuador();
   const startOfMonth = today.slice(0, 7) + "-01";
-  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  const thirtyDaysAgo = addDays(today, -29);
   const currentYear = new Date().getFullYear();
 
   const [
@@ -51,8 +51,7 @@ export async function getDashboardStats() {
     supabase
       .from("attendances")
       .select("id", { count: "exact", head: true })
-      .gte("checked_in_at", today)
-      .lt("checked_in_at", tomorrow),
+      .eq("checked_in_date", today),
 
     supabase
       .from("members")

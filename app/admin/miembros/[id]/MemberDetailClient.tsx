@@ -4,6 +4,7 @@ import { useState, useTransition, useRef } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { site } from "@/app/content";
+import { todayInEcuador } from "@/lib/date";
 import {
   addProgress,
   deleteProgress,
@@ -1195,7 +1196,7 @@ function ProgresoTab({ progress, member }: { progress: Progress[]; member: Membe
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Fecha</label>
-              <input name="measured_at" type="date" defaultValue={new Date().toISOString().split("T")[0]} className={inputCls} />
+              <input name="measured_at" type="date" defaultValue={todayInEcuador()} className={inputCls} />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Peso (kg)</label>

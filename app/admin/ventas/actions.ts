@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { todayInEcuador } from "@/lib/date";
 
 function dayAfter(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -105,7 +106,7 @@ export async function createCounterSale(params: {
   }
 
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const saleDate = new Date().toISOString().split("T")[0];
+  const saleDate = todayInEcuador();
   let membershipStartsAt: string | null = null; // fecha de inicio si se encadenó
 
   const { data: sale, error } = await supabase
@@ -126,7 +127,7 @@ export async function createCounterSale(params: {
 
   // Para encadenar membresías: si el socio ya tiene una activa vigente, la nueva
   // arranca el día siguiente a su vencimiento (no pierde los días restantes).
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInEcuador();
   let chainEnd: string | null = null;
   if (hasPlan && memberId) {
     const { data: active } = await supabase

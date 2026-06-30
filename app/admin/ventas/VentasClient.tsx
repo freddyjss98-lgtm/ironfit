@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { createSale, createCounterSale } from "./actions";
+import { todayInEcuador } from "@/lib/date";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -272,7 +273,7 @@ function GenerarVentaForm({
           const fd = new FormData();
           fd.set("description", notes || "Venta manual");
           fd.set("total", String(total));
-          fd.set("sale_date", new Date().toISOString().split("T")[0]);
+          fd.set("sale_date", todayInEcuador());
           fd.set("payment_method", paymentMethod);
           if (bankReference) fd.set("bank_reference", bankReference);
           if (memberId) fd.set("member_id", memberId);

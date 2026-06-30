@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { todayInEcuador } from "@/lib/date";
 
 // Aprueba la solicitud → renueva la membresía (membership + venta) y la marca aprobada.
 export async function approveRenewalRequest(requestId: string) {
@@ -58,7 +59,7 @@ export async function approveRenewalRequest(requestId: string) {
 
   // La venta se registra HOY (día del pago), no en la fecha de inicio de la
   // membresía (que al renovar puede ser futura).
-  const saleDate = new Date().toISOString().split("T")[0];
+  const saleDate = todayInEcuador();
   const { data: sale } = await supabase
     .from("sales")
     .insert({

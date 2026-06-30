@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { todayInEcuador } from "@/lib/date";
 
 function dayAfter(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -21,7 +22,7 @@ async function nextMembershipStart(
   memberId: string,
   fallback?: string
 ): Promise<string> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInEcuador();
   const base = fallback ?? today;
   const { data } = await supabase
     .from("memberships")
@@ -44,7 +45,7 @@ async function nextMembershipStart(
 // cuenta como activa si status='active' y su fecha de fin no ha pasado.
 export async function getActiveMembership(memberId: string) {
   const supabase = await createClient();
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInEcuador();
   const { data } = await supabase
     .from("memberships")
     .select("id, plan_id, start_date, end_date, paid_amount, membership_plans(name, color)")
@@ -114,7 +115,7 @@ export async function createMembership(formData: FormData) {
   if (mError || !membership) throw new Error(mError?.message ?? "Error al crear membresía");
 
   // La venta se registra HOY (día del pago), no en la fecha de inicio de la membresía.
-  const saleDate = new Date().toISOString().split("T")[0];
+  const saleDate = todayInEcuador();
 
   // Create sale record linked to this membership
   const { data: sale, error: sError } = await supabase
@@ -165,7 +166,7 @@ export async function renewMembership(
   if (error || !current) throw new Error("Membresía no encontrada");
 
   const plan = current.membership_plans as unknown as { duration_days: number; name: string; price: number };
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInEcuador();
   // Si aún está vigente, la renovación arranca el día siguiente al vencimiento
   // (no pierde días); si ya venció, arranca hoy.
   const newStart = current.end_date >= today ? dayAfter(current.end_date) : today;
@@ -196,7 +197,7 @@ export async function renewMembership(
 
   // Sale record — la venta se registra HOY (día del pago), no en la fecha de
   // inicio de la nueva membresía (que al renovar puede ser futura).
-  const saleDate = new Date().toISOString().split("T")[0];
+  const saleDate = todayInEcuador();
   const { data: sale } = await supabase
     .from("sales")
     .insert({
@@ -244,7 +245,7 @@ export async function freezeMembership(membershipId: string) {
     throw new Error("Solo se puede congelar una membresía activa");
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInEcuador();
   const { error } = await supabase
     .from("memberships")
     .update({ status: "frozen", frozen_at: today })
@@ -383,7 +384,7 @@ export async function changeMembershipPlan(currentMembershipId: string, formData
   if (cancelError) throw new Error(cancelError.message);
 
   // 2. Crear la nueva membresía desde hoy
-  const startDate = new Date().toISOString().split("T")[0];
+  const startDate = todayInEcuador();
   const end = new Date(startDate + "T00:00:00");
   end.setDate(end.getDate() + plan.duration_days);
   const endDate = end.toISOString().split("T")[0];

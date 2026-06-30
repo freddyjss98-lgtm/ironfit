@@ -10,6 +10,7 @@ import {
   resumeMembership,
 } from "./actions";
 import NewMembershipForm from "./NewMembershipForm";
+import { todayInEcuador } from "@/lib/date";
 
 const inputCls =
   "w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors";
@@ -577,7 +578,7 @@ function RenewMembershipModal({
 
   // Fechas calculadas (mismo criterio que el servidor): si está vigente,
   // arranca el día siguiente al vencimiento; si ya venció, hoy.
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInEcuador();
   const newStart = membership.end_date >= today ? dayAfterStr(membership.end_date) : today;
   const newEnd = addDaysStr(newStart, membership.plan_duration_days);
   const stacked = newStart > today;
@@ -684,7 +685,7 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
   const [cancelling, setCancelling] = useState<Membership | null>(null);
   const [renewing, setRenewing] = useState<Membership | null>(null);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInEcuador();
   const expired = memberships.filter((m) => m.effective_status === "expired");
   const activeAll = memberships.filter((m) => m.effective_status === "active");
   // Programadas: ya pagadas pero su periodo aún no empieza (encadenadas).

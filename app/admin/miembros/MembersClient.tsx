@@ -12,6 +12,7 @@ import {
   cancelMembership,
 } from "../membresias/actions";
 import MemberForm from "./MemberForm";
+import { todayInEcuador } from "@/lib/date";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -444,7 +445,7 @@ function AssignNewPanel({
   onClose: () => void;
 }) {
   const [planId, setPlanId] = useState(plans[0]?.id ?? "");
-  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [startDate, setStartDate] = useState(todayInEcuador());
   const [amount, setAmount] = useState(String(plans[0]?.price ?? ""));
   const [method, setMethod] = useState("cash");
   const [pending, startTransition] = useTransition();

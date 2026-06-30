@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { todayInEcuador } from "@/lib/date";
 
 export async function checkInMember(memberId: string) {
   const supabase = await createClient();
@@ -19,7 +20,7 @@ export async function checkInMember(memberId: string) {
   const isActive =
     membership &&
     membership.status === "active" &&
-    new Date(membership.end_date) >= new Date(new Date().toISOString().split("T")[0]);
+    (membership.end_date as string) >= todayInEcuador();
 
   const { data, error } = await supabase
     .from("attendances")

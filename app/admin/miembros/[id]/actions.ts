@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { isValidCedula, normalizeCedula } from "@/lib/cedula";
 import type { ActionResult } from "@/lib/result";
+import { todayInEcuador } from "@/lib/date";
 
 async function assertAdmin() {
   const supabase = await createClient();
@@ -172,7 +173,7 @@ export async function addProgress(memberId: string, formData: FormData) {
 
   const { error } = await supabase.from("member_progress").insert({
     member_id: memberId,
-    measured_at: (formData.get("measured_at") as string) || new Date().toISOString().split("T")[0],
+    measured_at: (formData.get("measured_at") as string) || todayInEcuador(),
     weight: parse("weight"),
     body_fat: parse("body_fat"),
     muscle_mass: parse("muscle_mass"),

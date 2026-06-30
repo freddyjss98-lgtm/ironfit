@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { createMembership } from "./actions";
+import { todayInEcuador } from "@/lib/date";
 
 type Member = { id: string; full_name: string; phone: string };
 type Plan = { id: string; name: string; price: number; duration_days: number; color: string };
@@ -22,7 +23,7 @@ export default function NewMembershipForm({ members, plans, onClose, defaultMemb
   const [pending, startTransition] = useTransition();
   const [selectedPlanId, setSelectedPlanId] = useState(plans[0]?.id ?? "");
   const [paidAmount, setPaidAmount] = useState(String(plans[0]?.price ?? ""));
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [startDate, setStartDate] = useState(() => todayInEcuador());
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
 
