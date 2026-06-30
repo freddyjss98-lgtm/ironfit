@@ -34,8 +34,17 @@ export function normalizePhoneEC(phone: string): string {
   return "593" + digits;
 }
 
+/**
+ * Phone Number ID de la Cloud API. Acepta dos nombres de env para tolerar
+ * configuraciones previas: el oficial `WHATSAPP_PHONE_ID` y el alterno
+ * `WHATSAPP_PHONE_NUMBER_ID` (como lo nombra la doc de Meta). Prefiere el primero.
+ */
+function whatsappPhoneId(): string | undefined {
+  return process.env.WHATSAPP_PHONE_ID ?? process.env.WHATSAPP_PHONE_NUMBER_ID;
+}
+
 export function getWhatsappMode(): WhatsappMode {
-  return process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID
+  return process.env.WHATSAPP_TOKEN && whatsappPhoneId()
     ? "meta"
     : "dry_run";
 }
@@ -57,7 +66,7 @@ export type TemplateMessage = {
 async function postGraphMessage(
   payload: Record<string, unknown>
 ): Promise<SendResult> {
-  const phoneId = process.env.WHATSAPP_PHONE_ID!;
+  const phoneId = whatsappPhoneId()!;
   const token = process.env.WHATSAPP_TOKEN!;
   const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`;
 
