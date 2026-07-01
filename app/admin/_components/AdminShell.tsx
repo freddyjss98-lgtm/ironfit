@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import { ADMIN_NAV, BOTTOM_HREFS_ADMIN, BOTTOM_HREFS_COACH } from "./nav";
+import type { NavItem } from "@/app/_components/MobileNav";
 
 const titles: Record<string, string> = {
   "/admin": "Dashboard",
@@ -53,7 +55,6 @@ export default function AdminShell({
   children: ReactNode;
   role?: "admin" | "coach";
 }) {
-  const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
   if (pathname === "/admin/login") return <>{children}</>;
@@ -68,13 +69,27 @@ export default function AdminShell({
     s.match.some((m) => pathname === m || pathname.startsWith(m + "/"))
   );
 
+  // Navegación móvil filtrada por rol
+  const navForRole = role === "coach" ? ADMIN_NAV.filter((l) => l.coach) : ADMIN_NAV;
+  const mobileAll: NavItem[] = navForRole.map((l) => ({
+    href: l.href,
+    label: l.label,
+    icon: l.icon,
+    match: l.match,
+  }));
+  const bottomHrefs = role === "coach" ? BOTTOM_HREFS_COACH : BOTTOM_HREFS_ADMIN;
+  const mobileBottom: NavItem[] = bottomHrefs
+    .map((h) => navForRole.find((l) => l.href === h))
+    .filter((l): l is (typeof ADMIN_NAV)[number] => !!l)
+    .map((l) => ({ href: l.href, label: l.short, icon: l.icon, match: l.match }));
+
   return (
     <div className="min-h-screen flex bg-bg">
-      <Sidebar open={open} onClose={() => setOpen(false)} role={role} />
+      <Sidebar role={role} />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar title={title} onMenuClick={() => setOpen(true)} />
-        <main className="flex-1 p-4 md:p-8">
+        <Topbar title={title} mobileAll={mobileAll} mobileBottom={mobileBottom} />
+        <main className="flex-1 p-4 pb-24 md:p-8">
           {section && (
             <div className="flex gap-1 border-b border-line mb-6 overflow-x-auto">
               {section.tabs.map((t) => {

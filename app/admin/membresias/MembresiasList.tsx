@@ -685,15 +685,40 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
   const [cancelling, setCancelling] = useState<Membership | null>(null);
   const [renewing, setRenewing] = useState<Membership | null>(null);
 
-  const today = todayInEcuador();
-  const expired = memberships.filter((m) => m.effective_status === "expired");
+  // Socios que YA tienen una membresía vigente (activa/programada o congelada).
+  // Si un socio reactiva/renueva, entra aquí y deja de contar como "vencido".
+  const currentMemberIds = new Set(
+    memberships
+      .filter((m) => m.effective_status === "active" || m.effective_status === "frozen")
+      .map((m) => m.member_id)
+  );
+
+  // Vencidas: una sola fila por socio (la de vencimiento más reciente) y solo si
+  // NO tiene ninguna membresía vigente. Así un socio nunca está en dos estados.
+  const expiredByMember = new Map<string, Membership>();
+  for (const m of memberships) {
+    if (m.effective_status !== "expired") continue;
+    if (currentMemberIds.has(m.member_id)) continue;
+    const prev = expiredByMember.get(m.member_id);
+    if (!prev || m.end_date > prev.end_date) expiredByMember.set(m.member_id, m);
+  }
+  const expired = Array.from(expiredByMember.values());
+
+  // Activas: incluye las "programadas" (que inician al vencer la actual). Una
+  // sola fila por socio: la de vencimiento más lejano = su cobertura real. Así,
+  // quien renovó por adelantado aparece SOLO aquí y no en una lista aparte.
   const activeAll = memberships.filter((m) => m.effective_status === "active");
-  // Programadas: ya pagadas pero su periodo aún no empieza (encadenadas).
-  const scheduled = activeAll.filter((m) => m.start_date > today);
-  const active = activeAll.filter((m) => m.start_date <= today);
+  const activeByMember = new Map<string, Membership>();
+  for (const m of activeAll) {
+    const prev = activeByMember.get(m.member_id);
+    if (!prev || m.end_date > prev.end_date) activeByMember.set(m.member_id, m);
+  }
+  const active = Array.from(activeByMember.values());
+
   const frozen = memberships.filter((m) => m.effective_status === "frozen");
   const cancelled = memberships.filter((m) => m.effective_status === "cancelled");
-  // Por vencer: activas que vencen en los próximos 7 días (incluye hoy)
+  // Por vencer: según la cobertura más lejana del socio (respeta renovaciones
+  // adelantadas), así quien ya renovó no aparece como "por vencer".
   const expiringSoon = active.filter(
     (m) => m.days_until_expiry >= 0 && m.days_until_expiry <= 7
   );
@@ -740,18 +765,6 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
           onCancel={setCancelling}
           onRenew={setRenewing}
         />
-        {scheduled.length > 0 && (
-          <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.04] p-4">
-            <MembresiaSection
-              title="🗓 Programadas (inician al vencer la actual)"
-              rows={scheduled}
-              csvFilename="membresias_programadas.csv"
-              onEdit={setEditing}
-              onCancel={setCancelling}
-              onRenew={setRenewing}
-            />
-          </div>
-        )}
         {frozen.length > 0 && (
           <div className="rounded-xl border border-blue-500/25 bg-blue-500/[0.04] p-4">
             <MembresiaSection

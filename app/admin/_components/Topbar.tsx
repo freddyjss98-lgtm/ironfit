@@ -2,26 +2,36 @@
 
 import Link from "next/link";
 import { signOut } from "../login/actions";
+import MobileNav, { type NavItem } from "@/app/_components/MobileNav";
 
 type Props = {
   title: string;
-  onMenuClick: () => void;
+  mobileAll: NavItem[];
+  mobileBottom: NavItem[];
 };
 
-export default function Topbar({ title, onMenuClick }: Props) {
+export default function Topbar({ title, mobileAll, mobileBottom }: Props) {
   return (
     <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur border-b border-line h-14 md:h-16 flex items-center justify-between px-4 md:px-8">
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-label="Abrir menú"
-          onClick={onMenuClick}
-          className="md:hidden flex flex-col gap-1.5 justify-center items-center w-9 h-9 border border-line-2 hover:border-accent"
-        >
-          <span className="block w-4 h-px bg-fg" />
-          <span className="block w-4 h-px bg-fg" />
-          <span className="block w-4 h-px bg-fg" />
-        </button>
+        {/* Navegación móvil: acordeón + barra inferior (oculto en escritorio) */}
+        <MobileNav
+          allItems={mobileAll}
+          bottomItems={mobileBottom}
+          roots={["/admin"]}
+          footer={
+            <div className="flex flex-col gap-2">
+              <Link href="/portal" className="inline-flex items-center gap-2 text-sm text-fg/60 hover:text-fg transition-colors">
+                Vista usuario
+              </Link>
+              <form action={signOut}>
+                <button type="submit" className="text-sm text-fg/50 hover:text-fg transition-colors">
+                  Cerrar sesión
+                </button>
+              </form>
+            </div>
+          }
+        />
         <h1 className="font-display text-xl md:text-2xl uppercase tracking-tight">
           {title}
         </h1>

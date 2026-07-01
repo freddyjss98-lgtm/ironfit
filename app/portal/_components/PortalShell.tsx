@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { portalSignOut } from "../login/actions";
+import MobileNav, { type NavItem } from "@/app/_components/MobileNav";
 
 const NAV = [
   { href: "/portal", label: "Mi membresía" },
@@ -12,6 +13,22 @@ const NAV = [
   { href: "/portal/tienda", label: "Tienda" },
   { href: "/portal/renovar", label: "Renovar" },
   { href: "/portal/perfil", label: "Perfil" },
+];
+
+// Navegación móvil (íconos de línea sutiles)
+const MOBILE_ALL: NavItem[] = [
+  { href: "/portal", label: "Mi membresía", icon: "card" },
+  { href: "/portal/progreso", label: "Progreso", icon: "chart" },
+  { href: "/portal/clases", label: "Entrenamiento", icon: "activity" },
+  { href: "/portal/tienda", label: "Tienda", icon: "bag" },
+  { href: "/portal/renovar", label: "Renovar", icon: "refresh" },
+  { href: "/portal/perfil", label: "Perfil", icon: "user" },
+];
+const MOBILE_BOTTOM: NavItem[] = [
+  { href: "/portal", label: "Membresía", icon: "card" },
+  { href: "/portal/progreso", label: "Progreso", icon: "chart" },
+  { href: "/portal/clases", label: "Entrenar", icon: "activity" },
+  { href: "/portal/perfil", label: "Perfil", icon: "user" },
 ];
 
 interface PortalShellProps {
@@ -39,7 +56,7 @@ export default function PortalShell({ children, isAdmin = false }: PortalShellPr
             />
           </Link>
 
-          <nav className="hidden sm:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1">
             {NAV.map((n) => (
               <Link
                 key={n.href}
@@ -60,7 +77,7 @@ export default function PortalShell({ children, isAdmin = false }: PortalShellPr
             {isAdmin && (
               <Link
                 href="/admin"
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold bg-accent/10 hover:bg-accent text-accent hover:text-white border border-accent/40 px-3 py-1.5 rounded-lg transition-all"
+                className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold bg-accent/10 hover:bg-accent text-accent hover:text-white border border-accent/40 px-3 py-1.5 rounded-lg transition-all"
                 title="Ir al panel de administración"
               >
                 <span>⚙</span>
@@ -68,7 +85,7 @@ export default function PortalShell({ children, isAdmin = false }: PortalShellPr
               </Link>
             )}
 
-            <form action={portalSignOut}>
+            <form action={portalSignOut} className="hidden md:block">
               <button
                 type="submit"
                 className="text-xs text-fg/40 hover:text-fg border border-line px-3 py-1.5 rounded transition-colors"
@@ -76,37 +93,38 @@ export default function PortalShell({ children, isAdmin = false }: PortalShellPr
                 Salir
               </button>
             </form>
-          </div>
-        </div>
 
-        {/* Mobile nav */}
-        <div className="sm:hidden flex border-t border-line overflow-x-auto">
-          {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              className={`flex-1 text-center py-2.5 text-xs font-medium whitespace-nowrap transition-colors ${
-                pathname === n.href
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-fg/40"
-              }`}
-            >
-              {n.label}
-            </Link>
-          ))}
-          {/* Admin tab in mobile — only if admin */}
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className="flex-1 text-center py-2.5 text-xs font-medium whitespace-nowrap text-accent border-b-2 border-transparent hover:border-accent transition-colors"
-            >
-              ⚙ Admin
-            </Link>
-          )}
+            {/* Navegación móvil: acordeón arriba + barra inferior */}
+            <MobileNav
+              allItems={MOBILE_ALL}
+              bottomItems={MOBILE_BOTTOM}
+              roots={["/portal"]}
+              footer={
+                <div className="flex flex-col gap-2">
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-accent/80 transition-colors"
+                    >
+                      Panel de administración
+                    </Link>
+                  )}
+                  <form action={portalSignOut}>
+                    <button
+                      type="submit"
+                      className="text-sm text-fg/50 hover:text-fg transition-colors"
+                    >
+                      Cerrar sesión
+                    </button>
+                  </form>
+                </div>
+              }
+            />
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6 pb-24 md:pb-6">
         {children}
       </main>
     </div>

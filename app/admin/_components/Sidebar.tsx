@@ -3,66 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-
-type NavLink = { href: string; label: string; icon: string; match?: string[]; coach?: boolean };
-
-const links: NavLink[] = [
-  { href: "/admin", label: "Dashboard", icon: "▣" },
-  { href: "/admin/miembros", label: "Miembros", icon: "◉", coach: true },
-  { href: "/admin/asistencia", label: "Asistencia", icon: "→", coach: true },
-  {
-    href: "/admin/clases",
-    label: "Entrenamiento",
-    icon: "◌",
-    match: ["/admin/clases", "/admin/reservas", "/admin/planificaciones"],
-    coach: true,
-  },
-  {
-    href: "/admin/membresias",
-    label: "Membresías y pagos",
-    icon: "◈",
-    match: ["/admin/membresias", "/admin/renovaciones", "/admin/ventas", "/admin/contabilidad"],
-  },
-  { href: "/admin/recordatorios", label: "Recordatorios", icon: "◐" },
-  { href: "/admin/productos", label: "Productos", icon: "▦" },
-  { href: "/admin/coaches", label: "Coaches", icon: "◎" },
-  { href: "/admin/eventos", label: "Eventos", icon: "◆", coach: true },
-  { href: "/admin/cuenta", label: "Mi cuenta", icon: "◍", coach: true },
-];
+import { ADMIN_NAV } from "./nav";
 
 type Props = {
-  open: boolean;
-  onClose: () => void;
   role?: "admin" | "coach";
 };
 
-export default function Sidebar({ open, onClose, role = "admin" }: Props) {
+export default function Sidebar({ role = "admin" }: Props) {
   const pathname = usePathname();
-  const visibleLinks = role === "coach" ? links.filter((l) => l.coach) : links;
+  const visibleLinks = role === "coach" ? ADMIN_NAV.filter((l) => l.coach) : ADMIN_NAV;
 
   return (
     <>
-      {/* Mobile backdrop */}
-      <div
-        className={`md:hidden fixed inset-0 z-40 bg-black/60 transition-opacity ${
-          open ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-        onClick={onClose}
-        aria-hidden
-      />
-
+      {/* Escritorio: sidebar fijo. En móvil se usa MobileNav (acordeón + barra inferior). */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-50 h-screen w-64 shrink-0
-          bg-bg-2 border-r border-line flex flex-col
-          transition-transform duration-300
-          ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        className="hidden md:flex sticky top-0 left-0 z-40 h-screen w-64 shrink-0
+          bg-bg-2 border-r border-line flex-col"
       >
         <div className="px-6 py-5 border-b border-line">
-          <Link
-            href="/admin"
-            className="flex items-center gap-3"
-            onClick={onClose}
-          >
+          <Link href="/admin" className="flex items-center gap-3">
             <Image
               src="/logo/icon-square.png"
               alt="Iron Fit"
@@ -90,7 +49,6 @@ export default function Sidebar({ open, onClose, role = "admin" }: Props) {
               <Link
                 key={link.href}
                 href={link.href}
-                onClick={onClose}
                 className={`flex items-center gap-3 px-6 py-3 t-mono-label transition-colors
                   ${isActive
                     ? "bg-accent/10 text-accent border-l-2 border-accent"
@@ -98,7 +56,7 @@ export default function Sidebar({ open, onClose, role = "admin" }: Props) {
                   }`}
               >
                 <span className="text-base w-5 text-center" aria-hidden>
-                  {link.icon}
+                  {link.glyph}
                 </span>
                 <span>{link.label}</span>
               </Link>

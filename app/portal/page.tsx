@@ -6,6 +6,7 @@ import { getPortalMember } from "@/lib/portal/get-member";
 import { computeAttendanceStats, type AttendanceStats } from "@/lib/portal/stats";
 import PreviewBanner from "./_components/PreviewBanner";
 import ProgressRing from "./_components/ProgressRing";
+import Icon from "@/app/_components/Icon";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type MembershipRow = {
@@ -14,7 +15,7 @@ type MembershipRow = {
   end_date: string;
   effective_status: string;
   days_until_expiry: number;
-  membership_plans: { name: string; duration_days: number; color: string } | null;
+  membership_plans: { name: string; duration_days: number; color: string; is_exclusive: boolean } | null;
 };
 
 function fmtDate(s: string | null) {
@@ -60,7 +61,7 @@ export default async function PortalPage() {
     supabase
       .from("vw_memberships_status")
       .select(
-        "id, start_date, end_date, effective_status, days_until_expiry, membership_plans(name, duration_days, color)"
+        "id, start_date, end_date, effective_status, days_until_expiry, membership_plans(name, duration_days, color, is_exclusive)"
       )
       .eq("member_id", member.id)
       .order("end_date", { ascending: false })
@@ -119,12 +120,12 @@ export default async function PortalPage() {
         <h2 className="text-fg/35 text-xs uppercase tracking-widest mb-3">Accesos rápidos</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {(membership?.effective_status !== "active" || (membership?.days_until_expiry ?? 99) <= 14) && (
-            <QuickAction href="/portal/renovar" emoji="♻️" label="Renovar" highlight />
+            <QuickAction href="/portal/renovar" icon="refresh" label="Renovar" highlight />
           )}
-          <QuickAction href="/portal/clases" emoji="🏋️" label="Entrenamiento" />
-          <QuickAction href="/portal/progreso" emoji="📈" label="Progreso y asistencia" />
-          <QuickAction href="/portal/renovar" emoji="🧾" label="Pagos y renovación" />
-          <QuickAction href="/portal/tienda" emoji="🛒" label="Tienda" />
+          <QuickAction href="/portal/clases" icon="activity" label="Entrenamiento" />
+          <QuickAction href="/portal/progreso" icon="chart" label="Progreso y asistencia" />
+          <QuickAction href="/portal/renovar" icon="receipt" label="Pagos y renovación" />
+          <QuickAction href="/portal/tienda" icon="bag" label="Tienda" />
         </div>
       </div>
 
@@ -232,6 +233,19 @@ function MembershipCard({ membership }: { membership: MembershipRow | null }) {
         <div>
           <p className="text-fg/40 text-[10px] uppercase tracking-widest mb-1">Membresía</p>
           <p className="text-lg font-bold leading-tight">{plan?.name ?? "Sin plan"}</p>
+          {plan?.is_exclusive && (
+            <div className="mt-2 flex flex-col gap-1">
+              <span className="inline-flex items-center gap-1.5 self-start px-2.5 py-1 rounded-full border border-amber-300/40 bg-gradient-to-r from-amber-400/25 to-yellow-500/10">
+                <span aria-hidden className="text-amber-300 text-sm leading-none">★</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-200">
+                  Plan exclusivo
+                </span>
+              </span>
+              <span className="text-amber-200/60 text-[11px] leading-tight">
+                Reservado solo para ti — gracias por tu fidelidad
+              </span>
+            </div>
+          )}
         </div>
         <span
           className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${
@@ -378,12 +392,12 @@ function ActivityHeatmap({ stats }: { stats: AttendanceStats }) {
 
 function QuickAction({
   href,
-  emoji,
+  icon,
   label,
   highlight,
 }: {
   href: string;
-  emoji: string;
+  icon: string;
   label: string;
   highlight?: boolean;
 }) {
@@ -397,11 +411,11 @@ function QuickAction({
       }`}
     >
       <span
-        className={`flex items-center justify-center w-9 h-9 rounded-lg text-lg shrink-0 transition-colors ${
-          highlight ? "bg-white/15" : "bg-white/5 group-hover:bg-white/10"
+        className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 transition-colors ${
+          highlight ? "bg-white/15 text-white" : "bg-white/5 group-hover:bg-white/10 text-fg/70"
         }`}
       >
-        {emoji}
+        <Icon name={icon} className="w-5 h-5" />
       </span>
       {label}
     </Link>

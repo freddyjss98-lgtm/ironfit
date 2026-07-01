@@ -50,6 +50,11 @@ function waLink(phone: string, message: string): string {
   return `https://wa.me/${num}?text=${encodeURIComponent(message)}`;
 }
 
+// Baja suavemente a la sección del recordatorio (mismo page, sin perderse).
+function scrollToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function expiryMessage(name: string, plan: string | null, endDate: string): string {
   return `Hola ${name.split(" ")[0]}! 👋 Tu membresía${plan ? ` *${plan}*` : ""} en Iron Fit Club vence el *${endDate}*. Te invitamos a renovar para continuar entrenando sin interrupción. 💪🔥`;
 }
@@ -147,32 +152,43 @@ export default function RecordatoriosClient({ members, plans }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Summary bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* Summary bar — cada tarjeta baja a su sección */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryCard
           label="Urgente (≤3d)"
           count={urgent.length}
           color="bg-red-500/15 text-red-400 border-red-500/20"
+          targetId="rem-urgent"
         />
         <SummaryCard
           label="Esta semana"
           count={soonWeek.length}
           color="bg-amber-500/15 text-amber-400 border-amber-500/20"
+          targetId="rem-soon-week"
         />
         <SummaryCard
           label="2 semanas"
           count={soonTwoWeeks.length}
           color="bg-blue-500/15 text-blue-400 border-blue-500/20"
+          targetId="rem-soon-2w"
+        />
+        <SummaryCard
+          label="Vencidas"
+          count={expiredRecent.length}
+          color="bg-red-500/10 text-red-300 border-red-500/20"
+          targetId="rem-expired"
         />
         <SummaryCard
           label="Inactivos (≥10d)"
           count={inactive.length}
           color="bg-orange-500/15 text-orange-400 border-orange-500/20"
+          targetId="rem-inactive"
         />
         <SummaryCard
           label="Cumpleaños"
           count={birthdayToday.length + birthdayWeek.length}
           color="bg-purple-500/15 text-purple-400 border-purple-500/20"
+          targetId={birthdayToday.length > 0 ? "rem-birthday-today" : "rem-birthday-week"}
         />
       </div>
 
@@ -183,6 +199,7 @@ export default function RecordatoriosClient({ members, plans }: Props) {
       )}
 
       <Section
+        id="rem-urgent"
         title="⚠️ Vence en 3 días o menos"
         badge="Urgente"
         badgeCls="bg-red-500/20 text-red-400"
@@ -197,6 +214,7 @@ export default function RecordatoriosClient({ members, plans }: Props) {
       />
 
       <Section
+        id="rem-soon-week"
         title="🔔 Vence esta semana (4–7 días)"
         badge="Esta semana"
         badgeCls="bg-amber-500/20 text-amber-400"
@@ -208,6 +226,7 @@ export default function RecordatoriosClient({ members, plans }: Props) {
       />
 
       <Section
+        id="rem-soon-2w"
         title="📅 Próximas 2 semanas (8–14 días)"
         badge="Próximamente"
         badgeCls="bg-blue-500/20 text-blue-400"
@@ -219,6 +238,7 @@ export default function RecordatoriosClient({ members, plans }: Props) {
       />
 
       <Section
+        id="rem-inactive"
         title="😴 Inactivos · membresía activa sin venir (≥10 días)"
         badge="En riesgo"
         badgeCls="bg-orange-500/20 text-orange-400"
@@ -234,6 +254,7 @@ export default function RecordatoriosClient({ members, plans }: Props) {
       />
 
       <Section
+        id="rem-birthday-today"
         title="🎂 Cumpleaños hoy"
         badge="Hoy"
         badgeCls="bg-purple-500/20 text-purple-400"
@@ -245,6 +266,7 @@ export default function RecordatoriosClient({ members, plans }: Props) {
       />
 
       <Section
+        id="rem-birthday-week"
         title="🎉 Cumpleaños esta semana"
         badge="Esta semana"
         badgeCls="bg-purple-500/10 text-purple-300"
@@ -266,6 +288,7 @@ export default function RecordatoriosClient({ members, plans }: Props) {
       />
 
       <Section
+        id="rem-expired"
         title="⏰ Membresía vencida recientemente (últimos 30 días)"
         badge="Vencida"
         badgeCls="bg-red-500/10 text-red-300"
@@ -329,20 +352,43 @@ function SummaryCard({
   label,
   count,
   color,
+  targetId,
 }: {
   label: string;
   count: number;
   color: string;
+  targetId?: string;
 }) {
-  return (
-    <div className={`border rounded-xl p-4 ${color}`}>
+  const inner = (
+    <>
       <p className="text-xs uppercase tracking-wider opacity-70">{label}</p>
       <p className="font-display text-3xl mt-1">{count}</p>
+    </>
+  );
+
+  // Clicable solo si hay algo que mostrar (la sección existe).
+  if (targetId && count > 0) {
+    return (
+      <button
+        type="button"
+        onClick={() => scrollToSection(targetId)}
+        className={`border rounded-xl p-4 text-left w-full transition hover:brightness-125 focus:outline-none focus:ring-2 focus:ring-current/40 cursor-pointer ${color}`}
+        title="Ver la lista"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`border rounded-xl p-4 ${color}`}>
+      {inner}
     </div>
   );
 }
 
 function Section({
+  id,
   title,
   badge,
   badgeCls,
@@ -353,6 +399,7 @@ function Section({
   getMeta,
   onActivate,
 }: {
+  id?: string;
   title: string;
   badge: string;
   badgeCls: string;
@@ -366,7 +413,7 @@ function Section({
   if (members.length === 0) return null;
 
   return (
-    <div className="bg-white/5 border border-line rounded-2xl overflow-hidden">
+    <div id={id} className="scroll-mt-24 bg-white/5 border border-line rounded-2xl overflow-hidden">
       <div className="px-5 py-4 border-b border-line flex items-center justify-between">
         <h3 className="text-sm font-semibold">{title}</h3>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded ${badgeCls}`}>
