@@ -514,9 +514,10 @@ export default function VentasClient({ sales, today, monthly, members, products,
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
 
+  const currentMonthIdx = parseInt(todayInEcuador().slice(5, 7), 10) - 1;
   const currentMonthName =
-    MONTH_NAMES[new Date().getMonth()].charAt(0).toUpperCase() +
-    MONTH_NAMES[new Date().getMonth()].slice(1);
+    MONTH_NAMES[currentMonthIdx].charAt(0).toUpperCase() +
+    MONTH_NAMES[currentMonthIdx].slice(1);
 
   // Apply filters
   const filtered = sales.filter((s) => {

@@ -25,6 +25,7 @@ export async function getDashboardStats() {
     activeMembersDetailRaw,
     attendanceStatsRaw,
     pendingRenewalsRaw,
+    newMembersRaw,
   ] = await Promise.all([
     supabase
       .from("vw_members_with_active_membership")
@@ -111,6 +112,13 @@ export async function getDashboardStats() {
       .from("renewal_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
+
+    // Socios auto-registrados pendientes de revisar (notificación del dashboard)
+    supabase
+      .from("members")
+      .select("id, full_name, phone, created_at")
+      .is("reviewed_at", null)
+      .order("created_at", { ascending: false }),
   ]);
 
   // ── Top 5 items by revenue ────────────────────────────────────────────────
@@ -247,6 +255,13 @@ export async function getDashboardStats() {
     atRiskMembers,
     atRiskCount: atRiskMembers.length,
     pendingRenewals: pendingRenewalsRaw.count ?? 0,
+    newMembers: (newMembersRaw.data ?? []).map((m) => ({
+      id: m.id as string,
+      full_name: m.full_name as string,
+      phone: (m.phone ?? "") as string,
+      created_at: m.created_at as string,
+    })),
+    newMembersCount: (newMembersRaw.data ?? []).length,
   };
 }
 

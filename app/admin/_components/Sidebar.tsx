@@ -21,7 +21,7 @@ const links: NavLink[] = [
     href: "/admin/membresias",
     label: "Membresías y pagos",
     icon: "◈",
-    match: ["/admin/membresias", "/admin/renovaciones", "/admin/ventas"],
+    match: ["/admin/membresias", "/admin/renovaciones", "/admin/ventas", "/admin/contabilidad"],
   },
   { href: "/admin/recordatorios", label: "Recordatorios", icon: "◐" },
   { href: "/admin/productos", label: "Productos", icon: "▦" },

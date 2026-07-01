@@ -1,6 +1,7 @@
 import { getDashboardStats } from "@/lib/supabase/queries";
 import Link from "next/link";
 import DashboardCharts from "./DashboardCharts";
+import NewMembersNotif from "./NewMembersNotif";
 import { waLink, winBackMessage } from "@/lib/whatsapp";
 
 function fmt(n: number) {
@@ -108,8 +109,16 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* ─── Notificaciones: acciones pendientes ─────────────────────────── */}
-      {(stats.pendingRenewals > 0 || stats.expiring7Days > 0 || stats.atRiskCount > 0) && (
+      {(stats.newMembersCount > 0 ||
+        stats.pendingRenewals > 0 ||
+        stats.expiring7Days > 0 ||
+        stats.atRiskCount > 0) && (
         <Section title="Notificaciones">
+          {stats.newMembersCount > 0 && (
+            <div className="mb-4">
+              <NewMembersNotif members={stats.newMembers} />
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {stats.pendingRenewals > 0 && (
               <NotifCard

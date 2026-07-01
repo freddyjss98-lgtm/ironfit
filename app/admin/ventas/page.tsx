@@ -1,14 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { todayInEcuador } from "@/lib/date";
 import VentasClient from "./VentasClient";
 
 export default async function VentasPage() {
   const supabase = await createClient();
 
-  const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .split("T")[0];
+  // Hora de Ecuador (UTC-5): el día y el mes se cortan a medianoche local, no UTC.
+  const todayStr = todayInEcuador();
+  const firstOfMonth = todayStr.slice(0, 7) + "-01";
 
   const [
     { data: salesRaw },

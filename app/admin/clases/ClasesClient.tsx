@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useRef } from "react";
+import { useState, useTransition, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   createSchedule,
@@ -36,22 +36,54 @@ function dateStrOf(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-// Estilos para que el contenido enriquecido (listas, títulos) se vea bien
+// Estilos para que el contenido enriquecido (listas, títulos, línea, tachado) se vea bien
 const WOD_CONTENT_CLS =
-  "[&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_h3]:text-base [&_h3]:font-bold [&_h3]:mt-2 [&_h3]:mb-1 leading-relaxed";
+  "[&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5 [&_h3]:text-base [&_h3]:font-bold [&_h3]:mt-2 [&_h3]:mb-1 [&_hr]:border-line [&_hr]:my-3 [&_s]:line-through [&_strike]:line-through leading-relaxed";
 
-const TOOLBAR: { cmd: string; arg?: string; label: string; title: string; style?: string }[] = [
-  { cmd: "bold", label: "B", title: "Negrita", style: "font-bold" },
-  { cmd: "italic", label: "i", title: "Cursiva", style: "italic" },
-  { cmd: "underline", label: "U", title: "Subrayado", style: "underline" },
-  { cmd: "formatBlock", arg: "H3", label: "T", title: "Título" },
-  { cmd: "insertUnorderedList", label: "•", title: "Lista con viñetas" },
-  { cmd: "insertOrderedList", label: "1.", title: "Lista numerada" },
-  { cmd: "justifyLeft", label: "⯇", title: "Alinear izquierda" },
-  { cmd: "justifyCenter", label: "≣", title: "Centrar" },
-  { cmd: "justifyRight", label: "⯈", title: "Alinear derecha" },
-  { cmd: "removeFormat", label: "⌫", title: "Quitar formato" },
+// Tamaños de letra (execCommand fontSize acepta 1–7: permite AGRANDAR y REDUCIR)
+const FONT_SIZES: { label: string; size: string; title: string; cls: string }[] = [
+  { label: "A", size: "2", title: "Texto pequeño", cls: "text-[11px]" },
+  { label: "A", size: "3", title: "Texto normal", cls: "text-sm" },
+  { label: "A", size: "5", title: "Texto grande", cls: "text-lg" },
 ];
+
+// Colores para resaltar (RX, scaling, avisos…). El primero devuelve al color normal.
+const TEXT_COLORS: { color: string; title: string }[] = [
+  { color: "#f4f1ea", title: "Normal (blanco)" },
+  { color: "#e84b1f", title: "Naranja" },
+  { color: "#22c55e", title: "Verde" },
+  { color: "#ef4444", title: "Rojo" },
+  { color: "#eab308", title: "Amarillo" },
+];
+
+// Botón de la barra de formato: preserva la selección del editor (onMouseDown + preventDefault)
+function TBtn({
+  title,
+  onExec,
+  children,
+}: {
+  title: string;
+  onExec: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onExec();
+      }}
+      className="min-w-8 h-8 px-2 flex items-center justify-center text-sm text-fg/70 hover:text-fg hover:bg-white/10 rounded transition-colors"
+    >
+      {children}
+    </button>
+  );
+}
+
+function Divider() {
+  return <span className="w-px h-5 bg-line mx-0.5 shrink-0" aria-hidden />;
+}
 
 // ─── Editor del WOD del día (texto enriquecido) ───────────────────────────────
 function DayWodEditor({
@@ -102,21 +134,52 @@ function DayWodEditor({
       </div>
 
       {/* Barra de formato */}
-      <div className="flex flex-wrap gap-1 mb-2 border border-line rounded-lg p-1 bg-white/5">
-        {TOOLBAR.map((b, i) => (
-          <button
-            key={i}
-            type="button"
-            title={b.title}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              exec(b.cmd, b.arg);
-            }}
-            className="min-w-8 h-8 px-2 flex items-center justify-center text-sm text-fg/70 hover:text-fg hover:bg-white/10 rounded transition-colors"
-          >
-            <span className={b.style ?? ""}>{b.label}</span>
-          </button>
+      <div className="flex flex-wrap items-center gap-0.5 mb-2 border border-line rounded-lg p-1 bg-white/5">
+        {/* Estilo de texto */}
+        <TBtn title="Negrita" onExec={() => exec("bold")}><span className="font-bold">B</span></TBtn>
+        <TBtn title="Cursiva" onExec={() => exec("italic")}><span className="italic">i</span></TBtn>
+        <TBtn title="Subrayado" onExec={() => exec("underline")}><span className="underline">U</span></TBtn>
+        <TBtn title="Tachado" onExec={() => exec("strikeThrough")}><span className="line-through">S</span></TBtn>
+
+        <Divider />
+
+        {/* Tamaño de letra (reducir / normal / agrandar) */}
+        {FONT_SIZES.map((f) => (
+          <TBtn key={f.size} title={f.title} onExec={() => exec("fontSize", f.size)}>
+            <span className={`${f.cls} font-semibold leading-none`}>{f.label}</span>
+          </TBtn>
         ))}
+        <TBtn title="Título" onExec={() => exec("formatBlock", "H3")}><span className="font-bold">T</span></TBtn>
+
+        <Divider />
+
+        {/* Color de texto */}
+        {TEXT_COLORS.map((c) => (
+          <TBtn key={c.color} title={c.title} onExec={() => exec("foreColor", c.color)}>
+            <span className="w-4 h-4 rounded-full border border-white/20 block" style={{ backgroundColor: c.color }} />
+          </TBtn>
+        ))}
+
+        <Divider />
+
+        {/* Listas */}
+        <TBtn title="Lista con viñetas" onExec={() => exec("insertUnorderedList")}>•</TBtn>
+        <TBtn title="Lista numerada" onExec={() => exec("insertOrderedList")}>1.</TBtn>
+
+        <Divider />
+
+        {/* Alineación */}
+        <TBtn title="Alinear izquierda" onExec={() => exec("justifyLeft")}>⯇</TBtn>
+        <TBtn title="Centrar" onExec={() => exec("justifyCenter")}>≣</TBtn>
+        <TBtn title="Alinear derecha" onExec={() => exec("justifyRight")}>⯈</TBtn>
+
+        <Divider />
+
+        {/* Extras */}
+        <TBtn title="Línea divisoria" onExec={() => exec("insertHorizontalRule")}>─</TBtn>
+        <TBtn title="Deshacer" onExec={() => exec("undo")}>↶</TBtn>
+        <TBtn title="Rehacer" onExec={() => exec("redo")}>↷</TBtn>
+        <TBtn title="Quitar formato" onExec={() => exec("removeFormat")}>⌫</TBtn>
       </div>
 
       {/* Cuadro de texto */}
@@ -387,6 +450,31 @@ function ToggleBtn({ scheduleId, active }: { scheduleId: string; active: boolean
   );
 }
 
+// Grupo de clases por franja (mañana/tarde/noche)
+function ClassGroup({
+  title,
+  items,
+  coaches,
+  onEdit,
+}: {
+  title: string;
+  items: Schedule[];
+  coaches: Coach[];
+  onEdit: (s: Schedule) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <p className="text-fg/35 text-xs uppercase tracking-widest mb-3">{title}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {items.map((s) => (
+          <ClassCard key={s.id} schedule={s} coaches={coaches} onEdit={() => onEdit(s)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Vista del día ────────────────────────────────────────────────────────────
 function DayView({
   date,
@@ -407,20 +495,6 @@ function DayView({
 
   const dayName = DAYS_FULL[date.getDay()];
   const dateLabel = `${dayName}, ${date.getDate()} de ${MONTH_NAMES[date.getMonth()].toLowerCase()}`;
-
-  function Group({ title, items }: { title: string; items: Schedule[] }) {
-    if (items.length === 0) return null;
-    return (
-      <div>
-        <p className="text-fg/35 text-xs uppercase tracking-widest mb-3">{title}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {items.map((s) => (
-            <ClassCard key={s.id} schedule={s} coaches={coaches} onEdit={() => onEdit(s)} />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-white/5 border border-line rounded-xl flex flex-col">
@@ -456,9 +530,9 @@ function DayView({
           </div>
         ) : (
           <>
-            <Group title="Mañana" items={morning} />
-            <Group title="Tarde" items={afternoon} />
-            <Group title="Noche" items={evening} />
+            <ClassGroup title="Mañana" items={morning} coaches={coaches} onEdit={onEdit} />
+            <ClassGroup title="Tarde" items={afternoon} coaches={coaches} onEdit={onEdit} />
+            <ClassGroup title="Noche" items={evening} coaches={coaches} onEdit={onEdit} />
           </>
         )}
       </div>
