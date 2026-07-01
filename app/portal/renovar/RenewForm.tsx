@@ -10,6 +10,7 @@ type Plan = {
   price: number;
   duration_days: number;
   color: string | null;
+  is_exclusive: boolean;
 };
 
 type Bank = {
@@ -153,6 +154,11 @@ export default function RenewForm({
                       style={{ backgroundColor: color }}
                     />
                   </div>
+                  {p.is_exclusive && (
+                    <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full border border-amber-300/40 bg-gradient-to-r from-amber-400/25 to-yellow-500/10 text-amber-300 text-[9px] font-bold uppercase tracking-wider">
+                      <span aria-hidden>★</span> Exclusivo para ti
+                    </span>
+                  )}
                   <p className="text-fg/40 text-xs mt-0.5">{p.duration_days} días</p>
                   <p className="font-display text-xl text-accent mt-1">${p.price}</p>
                 </button>

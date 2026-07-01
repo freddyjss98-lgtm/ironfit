@@ -162,6 +162,7 @@ export default async function PortalRenovarPage() {
             price: Number(p.price),
             duration_days: Number(p.duration_days),
             color: (p.color ?? null) as string | null,
+            is_exclusive: Boolean(p.is_exclusive),
           }))}
           bank={bank ?? null}
           pending={pending}
