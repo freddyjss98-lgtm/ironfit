@@ -32,7 +32,8 @@ const LANG = process.env.WHATSAPP_TEMPLATE_LANG ?? "es";
 const TPL = {
   expired: process.env.WHATSAPP_TEMPLATE_EXPIRED ?? "membership_expired",
   welcome: process.env.WHATSAPP_TEMPLATE_WELCOME ?? "member_welcome",
-  activated: process.env.WHATSAPP_TEMPLATE_ACTIVATED ?? "membership_activated",
+  // OJO: la plantilla en Meta quedó con guión bajo final (membership_activated_).
+  activated: process.env.WHATSAPP_TEMPLATE_ACTIVATED ?? "membership_activated_",
   winback: process.env.WHATSAPP_TEMPLATE_WINBACK ?? "member_winback",
   birthday: process.env.WHATSAPP_TEMPLATE_BIRTHDAY ?? "member_birthday",
   classReminder: process.env.WHATSAPP_TEMPLATE_CLASS ?? "class_reminder",
