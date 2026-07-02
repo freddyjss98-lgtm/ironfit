@@ -26,11 +26,13 @@ export const REMINDER_TYPE_WELCOME = "member_welcome";
 export const REMINDER_TYPE_WINBACK = "member_winback";
 export const REMINDER_TYPE_BIRTHDAY = "member_birthday";
 export const REMINDER_TYPE_CLASS = "class_reminder";
+export const REMINDER_TYPE_ACTIVATED = "membership_activated";
 
 const LANG = process.env.WHATSAPP_TEMPLATE_LANG ?? "es";
 const TPL = {
   expired: process.env.WHATSAPP_TEMPLATE_EXPIRED ?? "membership_expired",
   welcome: process.env.WHATSAPP_TEMPLATE_WELCOME ?? "member_welcome",
+  activated: process.env.WHATSAPP_TEMPLATE_ACTIVATED ?? "membership_activated",
   winback: process.env.WHATSAPP_TEMPLATE_WINBACK ?? "member_winback",
   birthday: process.env.WHATSAPP_TEMPLATE_BIRTHDAY ?? "member_birthday",
   classReminder: process.env.WHATSAPP_TEMPLATE_CLASS ?? "class_reminder",
@@ -154,43 +156,109 @@ const expiredProcessor: ReminderProcessor = {
   },
 };
 
-/** Bienvenida a socios nuevos (registrados en las últimas ~48h). */
+/**
+ * Bienvenida a TODO socio nuevo (registrado en las últimas ~48h) que aún NO
+ * tiene membresía activa: lo invita a adquirirla. A quien se registra y activa
+ * membresía de una lo cubre membership_activated (para no decirle "compra" a
+ * quien ya compró).
+ */
 const welcomeProcessor: ReminderProcessor = {
   type: REMINDER_TYPE_WELCOME,
   label: "Bienvenidas",
   async fetchCandidates(supabase) {
     const since = new Date(Date.now() - 2 * 86400000).toISOString();
-    const { data } = await supabase
-      .from("vw_members_with_active_membership")
-      .select(
-        "id, full_name, phone, current_plan_name, current_end_date, created_at"
-      )
+    const { data: news } = await supabase
+      .from("members")
+      .select("id, full_name, phone, created_at")
       .eq("status", "active")
-      .eq("membership_status", "active")
+      .is("deleted_at", null)
       .gte("created_at", since);
 
-    return (data ?? [])
-      .filter((r) => r.phone && r.created_at)
+    const rows = (news ?? []).filter((r) => r.phone);
+    if (rows.length === 0) return [];
+
+    // Excluir a quienes ya tienen membresía activa (esos reciben la de activación).
+    const today = todayEc();
+    const { data: active } = await supabase
+      .from("memberships")
+      .select("member_id")
+      .in(
+        "member_id",
+        rows.map((r) => r.id)
+      )
+      .eq("status", "active")
+      .gte("end_date", today);
+    const withMembership = new Set((active ?? []).map((a) => a.member_id));
+
+    return rows
+      .filter((r) => !withMembership.has(r.id))
       .map((r) => {
         const fn = firstName(r.full_name);
-        const plan = r.current_plan_name ?? "actual";
-        const fecha = r.current_end_date
-          ? formatSpanishDate(r.current_end_date)
-          : "";
         return {
           memberId: r.id,
           phone: r.phone,
           referenceDate: String(r.created_at).slice(0, 10),
           previewText:
-            `¡Bienvenido a Iron Fit Club, ${fn}! 🎉 Tu membresía *${plan}* ` +
-            `quedó activa hasta el *${fecha}*.`,
+            `¡Bienvenido a Iron Fit Club, ${fn}! 🎉 Adquiere tu membresía en ` +
+            `nuestro portal para empezar a entrenar 💪 Escribe *menú* si necesitas ayuda.`,
           template: {
             templateName: TPL.welcome,
             languageCode: LANG,
-            bodyParams: [fn, plan, fecha],
+            bodyParams: [fn],
           },
         };
       });
+  },
+};
+
+type MembershipRow = {
+  member_id: string;
+  end_date: string;
+  created_at: string;
+  members:
+    | { full_name: string; phone: string }
+    | { full_name: string; phone: string }[]
+    | null;
+  membership_plans: { name: string } | { name: string }[] | null;
+};
+
+/** Confirmación al activar una membresía (alta o renovación, últimas ~48h). */
+const activatedProcessor: ReminderProcessor = {
+  type: REMINDER_TYPE_ACTIVATED,
+  label: "Membresías activadas",
+  async fetchCandidates(supabase) {
+    const since = new Date(Date.now() - 2 * 86400000).toISOString();
+    const { data } = await supabase
+      .from("memberships")
+      .select(
+        "member_id, end_date, created_at, members(full_name, phone), membership_plans(name)"
+      )
+      .eq("status", "active")
+      .gte("created_at", since);
+
+    const out: ReminderCandidate[] = [];
+    for (const r of (data ?? []) as unknown as MembershipRow[]) {
+      const mem = one(r.members);
+      const plan = one(r.membership_plans);
+      if (!mem?.phone || !r.end_date) continue;
+      const fn = firstName(mem.full_name);
+      const planName = plan?.name ?? "actual";
+      const fecha = formatSpanishDate(r.end_date);
+      out.push({
+        memberId: r.member_id,
+        phone: mem.phone,
+        referenceDate: String(r.created_at).slice(0, 10),
+        previewText:
+          `¡Gracias por tu membresía, ${fn}! 🎉 Tu plan *${planName}* en Iron ` +
+          `Fit Club quedó activo hasta el *${fecha}*. ¡A entrenar con todo! 💪🔥`,
+        template: {
+          templateName: TPL.activated,
+          languageCode: LANG,
+          bodyParams: [fn, planName, fecha],
+        },
+      });
+    }
+    return out;
   },
 };
 
@@ -342,6 +410,7 @@ export const reminderProcessors: ReminderProcessor[] = [
   expiryProcessor,
   expiredProcessor,
   welcomeProcessor,
+  activatedProcessor,
   winbackProcessor,
   birthdayProcessor,
   classProcessor,
