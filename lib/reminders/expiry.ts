@@ -10,8 +10,16 @@ import type { TemplateMessage } from "@/lib/whatsapp/send";
 
 export const REMINDER_TYPE_EXPIRY = "membership_expiry";
 
-/** Ventana de aviso: se notifica cuando faltan 0..N días para vencer. */
-export const EXPIRY_REMINDER_DAYS = 3;
+/**
+ * Ventana de aviso: se notifica cuando faltan 0..N días para vencer.
+ *
+ * Se dispara UNA sola vez por período de membresía (idempotencia por
+ * member_id + fecha de vencimiento en reminder_log). Con la ventana en 7, el
+ * socio recibe el aviso al entrar al rango — es decir, ~7 días antes de vencer —
+ * y no se repite día a día. Si un socio ya está más cerca del vencimiento (ej.
+ * se registró tarde), igual recibe UN aviso la primera vez que se le procesa.
+ */
+export const EXPIRY_REMINDER_DAYS = 7;
 
 /** Nombre de la plantilla de Meta para el aviso de vencimiento. */
 export function expiryTemplateName(): string {
