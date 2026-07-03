@@ -302,7 +302,7 @@ function CredentialsPanel({
   onClose: () => void;
 }) {
   const portalUrl =
-    (typeof window !== "undefined" ? window.location.origin : "https://ironfitclub.vercel.app") +
+    (typeof window !== "undefined" ? window.location.origin : "https://www.ironfitclub.org") +
     "/portal/login";
 
   const firstName = memberName.trim().split(/\s+/)[0] || "";

@@ -165,7 +165,7 @@ function registerUrl() {
   const base =
     typeof window !== "undefined"
       ? window.location.origin
-      : "https://ironfitclub.vercel.app";
+      : "https://www.ironfitclub.org";
   return `${base}/portal/register`;
 }
 

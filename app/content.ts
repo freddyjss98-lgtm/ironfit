@@ -1,5 +1,5 @@
 export const site = {
-  url: "https://ironfitclub.vercel.app",
+  url: "https://www.ironfitclub.org",
   brand: "Iron Fit Club",
   city: "Loja, Ecuador",
   country: "Ecuador",
