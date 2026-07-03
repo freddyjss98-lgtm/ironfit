@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { createSale, createCounterSale } from "./actions";
 import { todayInEcuador } from "@/lib/date";
+import { fmtMoney } from "@/lib/format";
+import { downloadCSV } from "@/lib/csv";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -82,14 +84,7 @@ const MONTH_NAMES = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("es-EC", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
-}
+const fmt = fmtMoney;
 
 /** "2026-05-22" → "22 may 2026" */
 function fmtDate(dateStr: string): string {
@@ -97,27 +92,20 @@ function fmtDate(dateStr: string): string {
   return `${parseInt(d)} ${MONTH_NAMES[parseInt(m) - 1].slice(0, 3)} ${y}`;
 }
 
-function downloadCSV(rows: Sale[], filename: string) {
-  const headers = ["Fecha", "Cliente", "Monto", "Descuento", "Forma de Pago", "Referencia", "Notas"];
-  const lines = rows.map((s) =>
-    [
+function exportSales(rows: Sale[], filename: string) {
+  downloadCSV(
+    filename,
+    ["Fecha", "Cliente", "Monto", "Descuento", "Forma de Pago", "Referencia", "Notas"],
+    rows.map((s) => [
       s.sale_date,
-      `"${s.member_name ?? ""}"`,
+      s.member_name ?? "",
       s.total.toFixed(2),
       s.discount.toFixed(2),
       METHOD_LABELS[s.payment_method] ?? s.payment_method,
       s.bank_reference ?? "",
-      `"${s.notes ?? ""}"`,
-    ].join(",")
+      s.notes ?? "",
+    ])
   );
-  const csv = [headers.join(","), ...lines].join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ── Summary panel ──────────────────────────────────────────────────────────────
@@ -675,7 +663,7 @@ export default function VentasClient({ sales, today, monthly, members, products,
               </button>
             )}
             <button
-              onClick={() => downloadCSV(filtered, "ventas.csv")}
+              onClick={() => exportSales(filtered, "ventas.csv")}
               className="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5 self-end"
             >
               ↓ Excel

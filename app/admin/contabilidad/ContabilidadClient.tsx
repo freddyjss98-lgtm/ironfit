@@ -9,6 +9,8 @@ import {
   createRecurring, deleteRecurring, applyRecurring,
 } from "./actions";
 import { EXPENSE_CATEGORIES, CATEGORY_LABELS } from "./categories";
+import { fmtMoney } from "@/lib/format";
+import { downloadCSV } from "@/lib/csv";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -67,28 +69,14 @@ const METHOD_LABELS: Record<string, string> = {
   transfer: "Transferencia", cash: "Efectivo", card: "Tarjeta", cxc: "Cuentas x Cobrar", other: "Otro",
 };
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("es-EC", {
-    style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(n);
-}
+const fmt = fmtMoney;
+
 function catLabel(c: string) {
   return CATEGORY_LABELS[c as keyof typeof CATEGORY_LABELS] ?? c;
 }
 function fmtDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
   return `${parseInt(d)} ${MONTH_ABBR[parseInt(m) - 1].toLowerCase()} ${y}`;
-}
-function downloadCSV(filename: string, headers: string[], rows: (string | number)[][]) {
-  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const csv = [headers.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 const inputCls =

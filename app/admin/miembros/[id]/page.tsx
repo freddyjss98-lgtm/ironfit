@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import MemberDetailClient from "./MemberDetailClient";
+import EntrenamientoClient, { type WorkoutSession, type Routine } from "@/app/portal/progreso/EntrenamientoClient";
 
 export default async function MemberDetailPage({
   params,
@@ -35,6 +36,9 @@ export default async function MemberDetailPage({
     { data: sales },
     { data: stats },
     { data: memberProfile },
+    { data: exercises },
+    { data: workoutSessions },
+    { data: routinesData },
   ] = await Promise.all([
     supabase
       .from("vw_memberships_status")
@@ -71,7 +75,52 @@ export default async function MemberDetailPage({
     member.user_id
       ? supabase.from("profiles").select("role").eq("id", member.user_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+
+    // Globales + los propios de ESTE socio (no mostrar los personales de otros).
+    supabase
+      .from("exercises")
+      .select("id, name, muscle_group, is_global")
+      .or(`is_global.eq.true,member_id.eq.${id}`)
+      .order("name"),
+
+    supabase
+      .from("workout_sessions")
+      .select("id, session_date, notes, workout_sets(exercise_id, set_number, weight_kg, reps)")
+      .eq("member_id", id)
+      .order("session_date", { ascending: false }),
+
+    supabase
+      .from("routines")
+      .select("id, name, notes, routine_exercises(exercise_id, position, target_sets, target_reps)")
+      .eq("member_id", id)
+      .order("created_at", { ascending: false }),
   ]);
+
+  const routineRows: Routine[] = (routinesData ?? []).map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    notes: (r.notes ?? null) as string | null,
+    exercises: ((r.routine_exercises ?? []) as { exercise_id: string; position: number; target_sets: number | null; target_reps: number | null }[])
+      .map((re) => ({
+        exercise_id: re.exercise_id,
+        position: re.position,
+        target_sets: re.target_sets,
+        target_reps: re.target_reps,
+      })),
+  }));
+
+  const workoutSessionRows: WorkoutSession[] = (workoutSessions ?? []).map((s) => ({
+    id: s.id as string,
+    session_date: s.session_date as string,
+    notes: (s.notes ?? null) as string | null,
+    sets: ((s.workout_sets ?? []) as { exercise_id: string; set_number: number; weight_kg: number; reps: number }[])
+      .map((x) => ({
+        exercise_id: x.exercise_id,
+        set_number: x.set_number,
+        weight_kg: Number(x.weight_kg) || 0,
+        reps: Number(x.reps) || 0,
+      })),
+  }));
 
   return (
     <div className="space-y-5">
@@ -87,23 +136,38 @@ export default async function MemberDetailPage({
       <MemberDetailClient
         memberRole={(memberProfile?.role as string | null | undefined) ?? null}
         member={member}
-        memberships={(memberships ?? []).map((m: any) => ({
-          id: m.id,
-          start_date: m.start_date,
-          end_date: m.end_date,
-          paid_amount: m.paid_amount,
-          status: m.status,
-          effective_status: m.effective_status,
-          days_until_expiry: m.days_until_expiry,
-          plan_name: m.membership_plans?.name ?? "—",
-          plan_color: m.membership_plans?.color ?? "#999",
-        }))}
+        memberships={(memberships ?? []).map((m) => {
+          const plan = m.membership_plans as unknown as { name?: string; color?: string } | null;
+          return {
+            id: m.id,
+            start_date: m.start_date,
+            end_date: m.end_date,
+            paid_amount: m.paid_amount,
+            status: m.status,
+            effective_status: m.effective_status,
+            days_until_expiry: m.days_until_expiry,
+            plan_name: plan?.name ?? "—",
+            plan_color: plan?.color ?? "#999",
+          };
+        })}
         attendances={attendances ?? []}
         progress={progress ?? []}
         sales={sales ?? []}
         stats={stats ?? null}
         role={role}
       />
+
+      {/* Entrenamiento (log de fuerza) — el coach puede ver y registrar por el socio */}
+      <div className="space-y-3 pt-2">
+        <h2 className="font-display text-xl uppercase tracking-tight">Entrenamiento</h2>
+        <EntrenamientoClient
+          memberId={id}
+          canEdit={true}
+          exercises={exercises ?? []}
+          sessions={workoutSessionRows}
+          routines={routineRows}
+        />
+      </div>
     </div>
   );
 }

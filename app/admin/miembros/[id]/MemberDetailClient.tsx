@@ -3,8 +3,8 @@
 import { useState, useTransition, useRef } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
-import { site } from "@/app/content";
 import { todayInEcuador } from "@/lib/date";
+import { fmtMoney } from "@/lib/format";
 import {
   addProgress,
   deleteProgress,
@@ -307,13 +307,6 @@ function PromoteCoachModal({ member, onClose }: { member: Member; onClose: () =>
 const inputCls =
   "w-full bg-white/5 border border-white/15 text-fg rounded-lg px-3 py-2 text-sm outline-none focus:border-accent transition-colors placeholder:text-fg/20";
 const labelCls = "text-fg/50 text-xs uppercase tracking-wider";
-
-function fmtMoney(n: number) {
-  return new Intl.NumberFormat("es-EC", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
-}
 
 function fmtDate(s: string | null | undefined) {
   if (!s) return "—";

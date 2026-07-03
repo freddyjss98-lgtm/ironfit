@@ -3,14 +3,16 @@
 // =============================================================================
 
 /** Build a wa.me link, normalizing Ecuadorian phone numbers to E.164 (593…). */
-export function waLink(phone: string | null | undefined, message: string): string {
+export function waLink(phone: string | null | undefined, message?: string): string {
   const clean = (phone ?? "").replace(/\D/g, "");
   const num = clean.startsWith("593")
     ? clean
     : clean.startsWith("0")
       ? `593${clean.slice(1)}`
       : `593${clean}`;
-  return `https://wa.me/${num}?text=${encodeURIComponent(message)}`;
+  return message
+    ? `https://wa.me/${num}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/${num}`;
 }
 
 const first = (name: string) => name.split(" ")[0];
