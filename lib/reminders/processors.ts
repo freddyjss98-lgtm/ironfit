@@ -27,6 +27,7 @@ export const REMINDER_TYPE_WINBACK = "member_winback";
 export const REMINDER_TYPE_BIRTHDAY = "member_birthday";
 export const REMINDER_TYPE_CLASS = "class_reminder";
 export const REMINDER_TYPE_ACTIVATED = "membership_activated";
+export const REMINDER_TYPE_ADMIN_COPY = "admin_copy";
 
 const LANG = process.env.WHATSAPP_TEMPLATE_LANG ?? "es";
 const TPL = {
@@ -39,9 +40,16 @@ const TPL = {
   classReminder: process.env.WHATSAPP_TEMPLATE_CLASS ?? "class_reminder",
 };
 
+// Copia al admin: cada aviso enviado a un socio se replica al WhatsApp del gym.
+export const ADMIN_PHONE = process.env.ADMIN_WHATSAPP ?? "593959888060";
+export const ADMIN_COPY_TEMPLATE =
+  process.env.WHATSAPP_TEMPLATE_ADMIN_COPY ?? "admin_copy";
+
 /** Un candidato listo para enviar: ya trae el texto y la plantilla armados. */
 export type ReminderCandidate = {
   memberId: string;
+  /** Nombre completo del socio (para la copia al admin). */
+  memberName?: string;
   phone: string;
   /** Clave de idempotencia junto al tipo: no se reenvía si ya hubo éxito. */
   referenceDate: string; // 'YYYY-MM-DD'
@@ -55,6 +63,19 @@ export type ReminderProcessor = {
   label: string;
   fetchCandidates: (supabase: SupabaseClient) => Promise<ReminderCandidate[]>;
 };
+
+/**
+ * Arma la plantilla de copia para el admin a partir de un aviso ya enviado:
+ * {{1}} = a quién se envió (nombre · teléfono), {{2}} = el mensaje original.
+ */
+export function buildAdminCopyTemplate(c: ReminderCandidate): TemplateMessage {
+  const quien = c.memberName ? `${c.memberName} · ${c.phone}` : c.phone;
+  return {
+    templateName: ADMIN_COPY_TEMPLATE,
+    languageCode: LANG,
+    bodyParams: [quien, c.previewText],
+  };
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -116,6 +137,7 @@ const expiryProcessor: ReminderProcessor = {
         };
         return {
           memberId: r.id,
+          memberName: r.full_name,
           phone: r.phone,
           referenceDate: r.current_end_date,
           previewText: buildExpiryMessage(c),
@@ -142,6 +164,7 @@ const expiredProcessor: ReminderProcessor = {
         const fecha = formatSpanishDate(r.end_date);
         return {
           memberId: r.member_id,
+          memberName: r.full_name,
           phone: r.phone,
           referenceDate: r.end_date,
           previewText:
@@ -197,6 +220,7 @@ const welcomeProcessor: ReminderProcessor = {
         const fn = firstName(r.full_name);
         return {
           memberId: r.id,
+          memberName: r.full_name,
           phone: r.phone,
           referenceDate: String(r.created_at).slice(0, 10),
           previewText:
@@ -247,6 +271,7 @@ const activatedProcessor: ReminderProcessor = {
       const fecha = formatSpanishDate(r.end_date);
       out.push({
         memberId: r.member_id,
+        memberName: mem.full_name,
         phone: mem.phone,
         referenceDate: String(r.created_at).slice(0, 10),
         previewText:
@@ -299,6 +324,7 @@ const winbackProcessor: ReminderProcessor = {
       const dias = String(r.days_inactive);
       return {
         memberId: r.member_id,
+        memberName: r.full_name,
         phone: r.phone,
         referenceDate: ref,
         previewText:
@@ -330,6 +356,7 @@ const birthdayProcessor: ReminderProcessor = {
         const fn = firstName(r.full_name);
         return {
           memberId: r.member_id,
+          memberName: r.full_name,
           phone: r.phone,
           referenceDate: ref,
           previewText:
@@ -391,6 +418,7 @@ const classProcessor: ReminderProcessor = {
       const lista = e.items.join(" y ");
       return {
         memberId,
+        memberName: e.name,
         phone: e.phone,
         referenceDate: today,
         previewText:

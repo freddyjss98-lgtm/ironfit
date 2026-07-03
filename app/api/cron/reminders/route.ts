@@ -19,6 +19,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getWhatsappMode, sendWhatsapp } from "@/lib/whatsapp/send";
 import {
   reminderProcessors,
+  buildAdminCopyTemplate,
+  ADMIN_PHONE,
+  REMINDER_TYPE_ADMIN_COPY,
   type ReminderCandidate,
 } from "@/lib/reminders/processors";
 
@@ -49,6 +52,7 @@ export async function GET(req: NextRequest) {
   const summary: Record<string, TypeSummary> = {};
   let totalSent = 0;
   let totalFailed = 0;
+  let totalAdminCopies = 0;
 
   for (const processor of reminderProcessors) {
     // ── 1. Candidatos del tipo ────────────────────────────────────────────
@@ -112,8 +116,35 @@ export async function GET(req: NextRequest) {
         error: result.error ?? null,
       });
 
-      if (result.ok) sent++;
-      else failed++;
+      if (!result.ok) {
+        failed++;
+        continue;
+      }
+      sent++;
+
+      // ── Copia al admin, en el mismo momento que se envió al socio ─────────
+      const copy = await sendWhatsapp({
+        to: ADMIN_PHONE,
+        previewText: `📋 Copia (${c.memberName ?? c.phone}): ${c.previewText}`,
+        template: buildAdminCopyTemplate(c),
+      });
+      await supabase.from("reminder_log").insert({
+        member_id: c.memberId,
+        reminder_type: REMINDER_TYPE_ADMIN_COPY,
+        reference_date: c.referenceDate,
+        channel: "whatsapp",
+        provider: copy.provider,
+        status: copy.ok
+          ? mode === "dry_run"
+            ? "dry_run"
+            : "sent"
+          : "failed",
+        provider_message_id: copy.providerMessageId ?? null,
+        to_phone: ADMIN_PHONE,
+        message: c.previewText,
+        error: copy.error ?? null,
+      });
+      if (copy.ok) totalAdminCopies++;
     }
 
     summary[processor.type] = {
@@ -126,5 +157,12 @@ export async function GET(req: NextRequest) {
     totalFailed += failed;
   }
 
-  return Response.json({ ok: true, mode, totalSent, totalFailed, summary });
+  return Response.json({
+    ok: true,
+    mode,
+    totalSent,
+    totalFailed,
+    totalAdminCopies,
+    summary,
+  });
 }
