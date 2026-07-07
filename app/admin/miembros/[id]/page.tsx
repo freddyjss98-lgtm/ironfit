@@ -39,10 +39,11 @@ export default async function MemberDetailPage({
     { data: exercises },
     { data: workoutSessions },
     { data: routinesData },
+    { data: plans },
   ] = await Promise.all([
     supabase
       .from("vw_memberships_status")
-      .select("id, start_date, end_date, paid_amount, status, effective_status, days_until_expiry, membership_plans(name, color)")
+      .select("id, plan_id, start_date, end_date, paid_amount, status, effective_status, days_until_expiry, cancellation_reason, membership_plans(name, color, duration_days)")
       .eq("member_id", id)
       .order("end_date", { ascending: false }),
 
@@ -94,6 +95,11 @@ export default async function MemberDetailPage({
       .select("id, name, notes, routine_exercises(exercise_id, position, target_sets, target_reps)")
       .eq("member_id", id)
       .order("created_at", { ascending: false }),
+
+    supabase
+      .from("membership_plans")
+      .select("id, name, price, duration_days, color")
+      .order("price", { ascending: true }),
   ]);
 
   const routineRows: Routine[] = (routinesData ?? []).map((r) => ({
@@ -136,18 +142,35 @@ export default async function MemberDetailPage({
       <MemberDetailClient
         memberRole={(memberProfile?.role as string | null | undefined) ?? null}
         member={member}
+        plans={(plans ?? []).map((p) => ({
+          id: p.id as string,
+          name: p.name as string,
+          price: Number(p.price) || 0,
+          duration_days: p.duration_days as number,
+          color: (p.color as string) ?? "#999",
+        }))}
         memberships={(memberships ?? []).map((m) => {
-          const plan = m.membership_plans as unknown as { name?: string; color?: string } | null;
+          const plan = m.membership_plans as unknown as {
+            name?: string;
+            color?: string;
+            duration_days?: number;
+          } | null;
           return {
             id: m.id,
+            member_id: id,
+            full_name: member.full_name,
+            phone: member.phone,
+            plan_id: m.plan_id,
+            plan_name: plan?.name ?? "—",
+            plan_color: plan?.color ?? "#999",
+            plan_duration_days: plan?.duration_days ?? 30,
             start_date: m.start_date,
             end_date: m.end_date,
-            paid_amount: m.paid_amount,
+            paid_amount: Number(m.paid_amount) || 0,
             status: m.status,
             effective_status: m.effective_status,
             days_until_expiry: m.days_until_expiry,
-            plan_name: plan?.name ?? "—",
-            plan_color: plan?.color ?? "#999",
+            cancellation_reason: m.cancellation_reason ?? null,
           };
         })}
         attendances={attendances ?? []}

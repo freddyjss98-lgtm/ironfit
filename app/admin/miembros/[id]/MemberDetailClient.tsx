@@ -22,6 +22,8 @@ import {
   revokeMemberAccess,
   type AccessCredentials,
 } from "../accessActions";
+import MemberMembershipsPanel from "./MemberMembershipsPanel";
+import type { Membership, Plan } from "../../membresias/MembershipModals";
 
 type Member = {
   id: string;
@@ -40,18 +42,6 @@ type Member = {
   status: string;
   user_id: string | null;
   created_at: string;
-};
-
-type Membership = {
-  id: string;
-  plan_name: string;
-  plan_color: string;
-  start_date: string;
-  end_date: string;
-  paid_amount: number;
-  status: string;
-  effective_status: string;
-  days_until_expiry: number;
 };
 
 type Attendance = {
@@ -94,6 +84,7 @@ type Stats = {
 type Props = {
   member: Member;
   memberships: Membership[];
+  plans: Plan[];
   attendances: Attendance[];
   progress: Progress[];
   sales: Sale[];
@@ -320,6 +311,7 @@ function fmtDate(s: string | null | undefined) {
 export default function MemberDetailClient({
   member,
   memberships,
+  plans,
   attendances,
   progress,
   sales,
@@ -510,7 +502,13 @@ export default function MemberDetailClient({
 
       {tab === "Pagos" && <PagosTab sales={sales} />}
 
-      {tab === "Membresías" && <MembresiasTab memberships={memberships} />}
+      {tab === "Membresías" && (
+        <MemberMembershipsPanel
+          member={{ id: member.id, full_name: member.full_name, phone: member.phone }}
+          memberships={memberships}
+          plans={plans}
+        />
+      )}
 
       {/* Modales */}
       {showEditModal && (
@@ -1391,42 +1389,3 @@ function PagosTab({ sales }: { sales: Sale[] }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// TAB: MEMBRESÍAS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function MembresiasTab({ memberships }: { memberships: Membership[] }) {
-  if (memberships.length === 0) {
-    return (
-      <div className="bg-white/5 border border-line rounded-xl px-5 py-12 text-center text-fg/30 text-sm">
-        Sin membresías registradas
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {memberships.map((m) => (
-        <div key={m.id} className="bg-white/5 border border-line rounded-xl p-4 flex items-center gap-4">
-          <div className="w-2 h-12 rounded-full shrink-0" style={{ background: m.plan_color }} />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold">{m.plan_name}</p>
-            <p className="text-fg/40 text-xs">
-              {m.start_date} → {m.end_date}
-            </p>
-          </div>
-          <div className="text-right">
-            <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-              m.effective_status === "active" ? "bg-emerald-500/15 text-emerald-400" :
-              m.effective_status === "expired" ? "bg-red-500/15 text-red-400" :
-              "bg-white/10 text-fg/40"
-            }`}>
-              {m.effective_status === "active" ? "Activa" : m.effective_status === "expired" ? "Vencida" : m.effective_status}
-            </span>
-            <p className="text-sm font-semibold mt-1">{fmtMoney(m.paid_amount)}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
