@@ -74,7 +74,10 @@ export function buildExpiryMessage(c: ExpiryCandidate): string {
 export function buildExpiryTemplate(c: ExpiryCandidate): TemplateMessage {
   return {
     templateName: expiryTemplateName(),
-    languageCode: process.env.WHATSAPP_TEMPLATE_EXPIRY_LANG ?? "es",
+    // Usa WHATSAPP_TEMPLATE_LANG (la que usan los demás avisos y sí funciona).
+    // Antes usaba WHATSAPP_TEMPLATE_EXPIRY_LANG, mal configurada en Vercel
+    // (p.ej. "es_ES"), lo que causaba (#132001) does not exist in the translation.
+    languageCode: process.env.WHATSAPP_TEMPLATE_LANG ?? "es",
     bodyParams: [
       firstName(c.full_name),
       c.current_plan_name ?? "actual",
