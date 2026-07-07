@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { todayInEcuador } from "@/lib/date";
+import { notifyMembershipActivated } from "@/lib/reminders/notifyActivation";
 
 function dayAfter(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -199,6 +200,9 @@ export async function createCounterSale(params: {
         quantity: item.quantity,
         unit_price: item.unitPrice,
       });
+
+      // Aviso instantáneo de la membresía recién vendida.
+      if (membership?.id) await notifyMembershipActivated(membership.id);
     }
   }
 

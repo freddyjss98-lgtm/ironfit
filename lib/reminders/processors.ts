@@ -273,7 +273,8 @@ const activatedProcessor: ReminderProcessor = {
         memberId: r.member_id,
         memberName: mem.full_name,
         phone: mem.phone,
-        referenceDate: String(r.created_at).slice(0, 10),
+        // Llave por end_date (igual que el aviso instantáneo) → no se duplican.
+        referenceDate: r.end_date,
         previewText:
           `¡Gracias por tu membresía, ${fn}! 🎉 Tu plan *${planName}* en Iron ` +
           `Fit Club quedó activo hasta el *${fecha}*. ¡A entrenar con todo! 💪🔥`,

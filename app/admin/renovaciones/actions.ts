@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { todayInEcuador } from "@/lib/date";
+import { notifyMembershipActivated } from "@/lib/reminders/notifyActivation";
 
 // Aprueba la solicitud → renueva la membresía (membership + venta) y la marca aprobada.
 export async function approveRenewalRequest(requestId: string) {
@@ -94,6 +95,8 @@ export async function approveRenewalRequest(requestId: string) {
     })
     .eq("id", requestId);
   if (updErr) throw new Error(updErr.message);
+
+  await notifyMembershipActivated(membership.id);
 
   revalidatePath("/admin/renovaciones");
   revalidatePath("/admin/membresias");

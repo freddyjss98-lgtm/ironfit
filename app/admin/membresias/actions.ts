@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { todayInEcuador } from "@/lib/date";
+import { notifyMembershipActivated } from "@/lib/reminders/notifyActivation";
 
 function dayAfter(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -144,6 +145,8 @@ export async function createMembership(formData: FormData) {
     unit_price: paidAmount,
   });
 
+  await notifyMembershipActivated(membership.id);
+
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/ventas");
   revalidatePath("/admin");
@@ -223,6 +226,8 @@ export async function renewMembership(
     });
   }
 
+  await notifyMembershipActivated(membership.id);
+
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/ventas");
   revalidatePath("/admin");
@@ -294,6 +299,8 @@ export async function resumeMembership(membershipId: string) {
 
   if (error) throw new Error(error.message);
 
+  await notifyMembershipActivated(membershipId);
+
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/miembros");
   revalidatePath("/admin");
@@ -348,6 +355,9 @@ export async function adjustMembershipDays(membershipId: string, days: number) {
     .eq("id", membershipId);
 
   if (error) throw new Error(error.message);
+
+  await notifyMembershipActivated(membershipId);
+
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/miembros");
   revalidatePath("/admin");
@@ -432,6 +442,8 @@ export async function changeMembershipPlan(currentMembershipId: string, formData
     }
   }
 
+  await notifyMembershipActivated(membership.id);
+
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/ventas");
   revalidatePath("/admin/miembros");
@@ -458,6 +470,8 @@ export async function updateMembership(
     .eq("id", membershipId);
 
   if (error) throw new Error(error.message);
+
+  await notifyMembershipActivated(membershipId);
 
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/miembros");
