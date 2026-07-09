@@ -289,55 +289,39 @@ const activatedProcessor: ReminderProcessor = {
   },
 };
 
-/** Reenganche de socios inactivos (14-30 días sin asistir), 1 vez cada 30 días. */
+/**
+ * Reenganche: socios SIN membresía activa cuya última membresía venció hace
+ * ~15 días (sin renovar). NO usa asistencia (no todos la marcan), así los
+ * socios activos nunca lo reciben. Una sola vez por vencimiento (llave end_date).
+ */
 const winbackProcessor: ReminderProcessor = {
   type: REMINDER_TYPE_WINBACK,
   label: "Reactivaciones",
   async fetchCandidates(supabase) {
     const { data } = await supabase
-      .from("vw_inactive_members")
-      .select("member_id, full_name, phone, days_inactive");
+      .from("vw_lapsed_members")
+      .select("member_id, full_name, phone, end_date, days_since_expiry");
 
-    let rows = (data ?? []).filter((r) => r.phone && r.days_inactive != null);
-
-    // Evita repetir el reenganche: silencia si ya se envió en los últimos 30 días.
-    if (rows.length > 0) {
-      const cutoff = new Date(Date.now() - 30 * 86400000)
-        .toISOString()
-        .slice(0, 10);
-      const { data: recent } = await supabase
-        .from("reminder_log")
-        .select("member_id")
-        .eq("reminder_type", REMINDER_TYPE_WINBACK)
-        .neq("status", "failed")
-        .gte("reference_date", cutoff)
-        .in(
-          "member_id",
-          rows.map((r) => r.member_id)
-        );
-      const suppressed = new Set((recent ?? []).map((x) => x.member_id));
-      rows = rows.filter((r) => !suppressed.has(r.member_id));
-    }
-
-    const ref = todayEc();
-    return rows.map((r) => {
-      const fn = firstName(r.full_name);
-      const dias = String(r.days_inactive);
-      return {
-        memberId: r.member_id,
-        memberName: r.full_name,
-        phone: r.phone,
-        referenceDate: ref,
-        previewText:
-          `Hola ${fn} 👋 ¡Te extrañamos en Iron Fit Club! Hace *${dias} días* ` +
-          `que no te vemos. Vuelve cuando quieras y lo retomamos juntos 💪🔥`,
-        template: {
-          templateName: TPL.winback,
-          languageCode: LANG,
-          bodyParams: [fn, dias],
-        },
-      };
-    });
+    return (data ?? [])
+      .filter((r) => r.phone && r.days_since_expiry != null)
+      .map((r) => {
+        const fn = firstName(r.full_name);
+        const dias = String(r.days_since_expiry);
+        return {
+          memberId: r.member_id,
+          memberName: r.full_name,
+          phone: r.phone,
+          referenceDate: r.end_date, // idempotencia: 1 reenganche por vencimiento
+          previewText:
+            `Hola ${fn} 👋 ¡Te extrañamos en Iron Fit Club! Hace *${dias} días* ` +
+            `que no te vemos. Vuelve cuando quieras y lo retomamos juntos 💪🔥`,
+          template: {
+            templateName: TPL.winback,
+            languageCode: LANG,
+            bodyParams: [fn, dias],
+          },
+        };
+      });
   },
 };
 
