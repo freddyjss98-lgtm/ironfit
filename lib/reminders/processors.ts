@@ -25,7 +25,6 @@ export const REMINDER_TYPE_EXPIRED = "membership_expired";
 export const REMINDER_TYPE_WELCOME = "member_welcome";
 export const REMINDER_TYPE_WINBACK = "member_winback";
 export const REMINDER_TYPE_BIRTHDAY = "member_birthday";
-export const REMINDER_TYPE_CLASS = "class_reminder";
 export const REMINDER_TYPE_ACTIVATED = "membership_activated";
 export const REMINDER_TYPE_ADMIN_COPY = "admin_copy";
 
@@ -37,7 +36,6 @@ const TPL = {
   activated: process.env.WHATSAPP_TEMPLATE_ACTIVATED ?? "membership_activated_",
   winback: process.env.WHATSAPP_TEMPLATE_WINBACK ?? "member_winback",
   birthday: process.env.WHATSAPP_TEMPLATE_BIRTHDAY ?? "member_birthday",
-  classReminder: process.env.WHATSAPP_TEMPLATE_CLASS ?? "class_reminder",
 };
 
 // Copia al admin: cada aviso enviado a un socio se replica al WhatsApp del gym.
@@ -88,15 +86,6 @@ function todayEc(): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Guayaquil",
   }).format(new Date());
-}
-
-/** '06:00:00' → '6:00 am' */
-function formatTime(t: string): string {
-  const [hh, mm] = t.split(":");
-  const h = parseInt(hh, 10);
-  const ampm = h < 12 ? "am" : "pm";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${mm} ${ampm}`;
 }
 
 /** PostgREST devuelve relaciones to-one a veces como objeto, a veces array. */
@@ -357,68 +346,6 @@ const birthdayProcessor: ReminderProcessor = {
   },
 };
 
-type BookingRow = {
-  member_id: string;
-  start_time: string;
-  class_schedules: { name: string } | { name: string }[] | null;
-  members:
-    | { full_name: string; phone: string }
-    | { full_name: string; phone: string }[]
-    | null;
-};
-
-/** Recordatorio de clase(s) reservada(s) para hoy. */
-const classProcessor: ReminderProcessor = {
-  type: REMINDER_TYPE_CLASS,
-  label: "Recordatorios de clase",
-  async fetchCandidates(supabase) {
-    const today = todayEc();
-    const { data } = await supabase
-      .from("class_bookings")
-      .select(
-        "member_id, start_time, class_schedules(name), members(full_name, phone)"
-      )
-      .eq("booking_date", today)
-      .eq("status", "confirmed")
-      .order("start_time", { ascending: true });
-
-    // Agrupa por socio: un solo mensaje que lista todas sus clases de hoy.
-    const byMember = new Map<
-      string,
-      { name: string; phone: string; items: string[] }
-    >();
-    for (const r of (data ?? []) as unknown as BookingRow[]) {
-      const mem = one(r.members);
-      const sched = one(r.class_schedules);
-      if (!mem?.phone || !sched?.name) continue;
-      const entry =
-        byMember.get(r.member_id) ??
-        { name: mem.full_name, phone: mem.phone, items: [] };
-      entry.items.push(`${sched.name} a las ${formatTime(r.start_time)}`);
-      byMember.set(r.member_id, entry);
-    }
-
-    return [...byMember.entries()].map(([memberId, e]) => {
-      const fn = firstName(e.name);
-      const lista = e.items.join(" y ");
-      return {
-        memberId,
-        memberName: e.name,
-        phone: e.phone,
-        referenceDate: today,
-        previewText:
-          `Hola ${fn} 👋 Hoy tienes reservada tu clase: ${lista}. ` +
-          `¡Te esperamos en Iron Fit Club! 💪`,
-        template: {
-          templateName: TPL.classReminder,
-          languageCode: LANG,
-          bodyParams: [fn, lista],
-        },
-      };
-    });
-  },
-};
-
 /** Orden de ejecución del cron. */
 export const reminderProcessors: ReminderProcessor[] = [
   expiryProcessor,
@@ -427,5 +354,4 @@ export const reminderProcessors: ReminderProcessor[] = [
   activatedProcessor,
   winbackProcessor,
   birthdayProcessor,
-  classProcessor,
 ];
