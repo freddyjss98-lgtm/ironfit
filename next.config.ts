@@ -11,13 +11,16 @@ const nextConfig: NextConfig = {
     ],
   },
   // El dominio antiguo (ironfitclub.vercel.app) fue compartido antes de tener
-  // dominio propio. Redirigimos permanentemente todo su tráfico al dominio final.
+  // dominio propio. Redirigimos permanentemente su tráfico al dominio final,
+  // EXCEPTO /api/*: hay integraciones externas registradas contra el dominio
+  // viejo (el webhook de WhatsApp en Meta) y Meta no sigue redirecciones —
+  // un 308 le cuenta como entrega fallida y el bot se queda mudo.
   async redirects() {
     return [
       {
-        source: "/:path*",
+        source: "/:path((?!api/).*)",
         has: [{ type: "host", value: "ironfitclub.vercel.app" }],
-        destination: "https://www.ironfitclub.org/:path*",
+        destination: "https://www.ironfitclub.org/:path",
         permanent: true,
       },
     ];
