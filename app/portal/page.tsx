@@ -64,6 +64,7 @@ export default async function PortalPage() {
         "id, start_date, end_date, effective_status, days_until_expiry, membership_plans(name, duration_days, color, is_exclusive)"
       )
       .eq("member_id", member.id)
+      .in("status", ["active", "frozen", "expired"]) // cancelled/suspended: no
       .order("end_date", { ascending: false })
       .limit(1)
       .maybeSingle(),

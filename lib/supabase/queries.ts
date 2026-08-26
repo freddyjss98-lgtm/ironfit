@@ -27,10 +27,12 @@ export async function getDashboardStats() {
     pendingRenewalsRaw,
     newMembersRaw,
   ] = await Promise.all([
+    // Socios con membresía vigente: la congelada cuenta (está pausada, no
+    // perdida). Las canceladas/suspendidas ya no entran en la vista.
     supabase
       .from("vw_members_with_active_membership")
       .select("id", { count: "exact", head: true })
-      .eq("membership_status", "active"),
+      .in("membership_status", ["active", "frozen"]),
 
     supabase
       .from("vw_expiring_soon")
@@ -71,10 +73,12 @@ export async function getDashboardStats() {
       .gte("month", `${currentYear}-01-01`)
       .order("month"),
 
-    // All sale_items (small dataset for a gym)
+    // All sale_items (small dataset for a gym). El !inner descarta los ítems de
+    // ventas anuladas: si no, el top de productos contaría plata que ya no está.
     supabase
       .from("sale_items")
-      .select("description, item_type, quantity, unit_price"),
+      .select("description, item_type, quantity, unit_price, sales!inner(voided_at)")
+      .is("sales.voided_at", null),
 
     // Active memberships with plan details (for MRR + distribution)
     supabase

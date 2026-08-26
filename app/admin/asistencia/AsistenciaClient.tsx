@@ -191,9 +191,15 @@ export default function AsistenciaClient({ members, todayAttendances, roster }: 
 
                   <div className="flex items-center gap-2 shrink-0">
                     {!membershipOK && !alreadyIn && (
-                      <span className="text-xs bg-red-500/15 text-red-400 px-2 py-0.5 rounded">
-                        Vencida
-                      </span>
+                      m.membership_status === "frozen" ? (
+                        <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded">
+                          Congelada
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-red-500/15 text-red-400 px-2 py-0.5 rounded">
+                          Vencida
+                        </span>
+                      )
                     )}
                     {alreadyIn ? (
                       <span className="text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded font-semibold">

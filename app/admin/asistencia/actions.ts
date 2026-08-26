@@ -8,11 +8,13 @@ export async function checkInMember(memberId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Get member's most recent active membership
+  // Membresía actual del socio, sin contar canceladas/suspendidas: una cancelada
+  // con end_date lejano (creada por error) no debe pasar por la vigente.
   const { data: membership } = await supabase
     .from("memberships")
     .select("id, end_date, status, membership_plans(name)")
     .eq("member_id", memberId)
+    .in("status", ["active", "frozen", "expired"])
     .order("end_date", { ascending: false })
     .limit(1)
     .maybeSingle();

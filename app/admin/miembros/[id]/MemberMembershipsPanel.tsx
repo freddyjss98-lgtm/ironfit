@@ -192,7 +192,7 @@ export default function MemberMembershipsPanel({
       )}
 
       {editing && (
-        <EditMembershipModal membership={editing} onClose={() => setEditing(null)} />
+        <EditMembershipModal membership={editing} plans={plans} onClose={() => setEditing(null)} />
       )}
       {cancelling && (
         <CancelMembershipModal membership={cancelling} onClose={() => setCancelling(null)} />

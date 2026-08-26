@@ -64,6 +64,7 @@ export default async function MemberDetailPage({
       .from("sales")
       .select("id, sale_date, total, payment_method, bank_reference, notes")
       .eq("member_id", id)
+      .is("voided_at", null)
       .order("sale_date", { ascending: false })
       .limit(30),
 

@@ -18,6 +18,9 @@ type Sale = {
   bank_reference: string | null;
   notes: string | null;
   member_name: string | null;
+  /** Anulada: sigue en la lista (auditoría) pero no cuenta en ningún total. */
+  voided: boolean;
+  void_reason: string | null;
 };
 
 type TodaySummary = {
@@ -701,13 +704,25 @@ export default function VentasClient({ sales, today, monthly, members, products,
 
                         {/* Cliente */}
                         <td className="px-4 py-3">
-                          <span className="text-accent font-medium">
+                          <span className={`font-medium ${s.voided ? "text-fg/35 line-through" : "text-accent"}`}>
                             {s.member_name ?? "—"}
                           </span>
+                          {s.voided && (
+                            <span
+                              title={s.void_reason ?? "Venta anulada"}
+                              className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400"
+                            >
+                              Anulada
+                            </span>
+                          )}
                         </td>
 
                         {/* Monto */}
-                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                        <td
+                          className={`px-4 py-3 text-right font-semibold tabular-nums ${
+                            s.voided ? "text-fg/35 line-through" : ""
+                          }`}
+                        >
                           {fmt(s.total)}
                         </td>
 

@@ -11,6 +11,7 @@ import {
   changeMembershipPlan,
   cancelMembership,
 } from "../membresias/actions";
+import { SaleVoidToggle } from "../membresias/MembershipModals";
 import MemberForm from "./MemberForm";
 import { todayInEcuador } from "@/lib/date";
 import { waLink } from "@/lib/whatsapp";
@@ -103,6 +104,19 @@ function MembershipBadge({ member }: { member: Member }) {
       <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-white/8 text-fg/35 border border-line/30">
         Sin membresía
       </span>
+    );
+  }
+
+  if (s === "frozen") {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/25 w-fit">
+          ❄ Congelada
+        </span>
+        {member.current_plan_name && (
+          <span className="text-xs text-fg/35 pl-0.5">{member.current_plan_name}</span>
+        )}
+      </div>
     );
   }
 
@@ -363,7 +377,9 @@ function Avatar({ name, url, size = 32 }: { name: string; url: string | null; si
 // ── Membresía inline (junto al nombre) ─────────────────────────────────────────
 
 function PlanInline({ member, onAssign }: { member: Member; onAssign: () => void }) {
-  const active = member.membership_status === "active" && member.current_plan_name;
+  const s = member.membership_status;
+  // Una congelada sigue siendo la membresía del socio: se muestra y se gestiona.
+  const active = (s === "active" || s === "frozen") && member.current_plan_name;
   if (active) {
     const color = member.current_plan_color ?? "#e84b1f";
     return (
@@ -410,7 +426,9 @@ function AssignPlanModal({
   onClose: () => void;
 }) {
   const hasActive =
-    member.membership_status === "active" && !!member.current_membership_id;
+    (member.membership_status === "active" ||
+      member.membership_status === "frozen") &&
+    !!member.current_membership_id;
 
   if (hasActive) {
     return <ManageMembershipPanel member={member} plans={plans} onClose={onClose} />;
@@ -545,6 +563,7 @@ function ManageMembershipPanel({
   const [method, setMethod] = useState("cash");
   const [reason, setReason] = useState(CANCEL_REASONS[0]);
   const [note, setNote] = useState("");
+  const [voidSale, setVoidSale] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const membershipId = member.current_membership_id!;
@@ -595,7 +614,10 @@ function ManageMembershipPanel({
 
   function handleCancel() {
     const finalReason = reason === "Otro" ? note.trim() || "Otro" : reason;
-    run(() => cancelMembership(membershipId, finalReason), "Membresía cancelada");
+    run(
+      () => cancelMembership(membershipId, finalReason, voidSale),
+      voidSale ? "Membresía cancelada y cobro anulado" : "Membresía cancelada"
+    );
   }
 
   return (
@@ -712,6 +734,12 @@ function ManageMembershipPanel({
             {reason === "Otro" && (
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Detalle del motivo..." className={fieldCls} autoFocus />
             )}
+            <SaleVoidToggle
+              membershipId={membershipId}
+              reason={reason}
+              checked={voidSale}
+              onChange={setVoidSale}
+            />
             <ModeFooter onBack={() => setMode("menu")} onConfirm={handleCancel} pending={pending} label="Eliminar membresía" danger />
           </div>
         )}

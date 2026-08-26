@@ -435,7 +435,7 @@ export default function MembresiasList({ memberships, members, plans }: Props) {
 
       {/* Modal editar fechas */}
       {editing && (
-        <EditMembershipModal membership={editing} onClose={() => setEditing(null)} />
+        <EditMembershipModal membership={editing} plans={plans} onClose={() => setEditing(null)} />
       )}
 
       {/* Modal cancelar con motivo */}

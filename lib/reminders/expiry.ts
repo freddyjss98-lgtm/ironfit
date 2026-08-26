@@ -21,9 +21,27 @@ export const REMINDER_TYPE_EXPIRY = "membership_expiry";
  */
 export const EXPIRY_REMINDER_DAYS = 7;
 
-/** Nombre de la plantilla de Meta para el aviso de vencimiento. */
+/**
+ * Nombre de la plantilla de Meta para el aviso de vencimiento.
+ *
+ * Fijo a propósito: ya NO se lee WHATSAPP_TEMPLATE_EXPIRY.
+ *
+ * Esa variable en Vercel quedó con un valor que no existe en Meta y provocó 653
+ * fallos seguidos con "(#132001) Template name does not exist in the
+ * translation" — desde el 3 de julio hasta el 25 de agosto de 2026 ningún socio
+ * recibió su aviso de vencimiento. El diagnóstico de julio culpó al idioma y se
+ * corrigió eso (da0cad8), pero el idioma nunca fue el problema: los demás avisos
+ * usan la MISMA variable de idioma y salen bien.
+ *
+ * Verificado el 2026-08-26 contra la Graph API de Meta (WABA 1639423534018428):
+ * `membership_expiry` · es · APPROVED · UTILITY · 3 variables, cuerpo
+ * "Hola {{1}}, tu membresía {{2}} en Iron Fit Club vence el {{3}}...", que calza
+ * exacto con buildExpiryTemplate.
+ *
+ * Si algún día hay que renombrarla en Meta, se cambia aquí — no por env.
+ */
 export function expiryTemplateName(): string {
-  return process.env.WHATSAPP_TEMPLATE_EXPIRY ?? "membership_expiry";
+  return "membership_expiry";
 }
 
 export type ExpiryCandidate = {

@@ -37,6 +37,7 @@ export default async function PortalRenovarPage() {
         .from("vw_memberships_status")
         .select("end_date, effective_status, days_until_expiry, membership_plans(name, price)")
         .eq("member_id", member.id)
+        .in("status", ["active", "frozen", "expired"]) // cancelled/suspended: no
         .order("end_date", { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -59,6 +60,7 @@ export default async function PortalRenovarPage() {
             .from("sales")
             .select("id, sale_date, total, payment_method, bank_reference, notes")
             .eq("member_id", member.id)
+            .is("voided_at", null)
             .order("sale_date", { ascending: false })
         : Promise.resolve({ data: [] as unknown[] }),
       member

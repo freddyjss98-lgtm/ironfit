@@ -16,10 +16,12 @@ export default async function VentasPage() {
     { data: products },
     { data: plans },
   ] = await Promise.all([
-      // All sales (client handles pagination + filtering)
+      // All sales (client handles pagination + filtering). Las anuladas se
+      // listan a propósito, marcadas: la auditoría necesita verlas. Los totales
+      // salen de vw_daily_sales, que sí las descarta.
       supabase
         .from("sales")
-        .select("id, sale_date, total, discount, payment_method, bank_reference, notes, members(full_name)")
+        .select("id, sale_date, total, discount, payment_method, bank_reference, notes, voided_at, void_reason, members(full_name)")
         .order("sale_date", { ascending: false })
         .order("created_at", { ascending: false }),
 
@@ -62,6 +64,8 @@ export default async function VentasPage() {
     bank_reference: (s.bank_reference ?? null) as string | null,
     notes: (s.notes ?? null) as string | null,
     member_name: (s.members?.full_name ?? null) as string | null,
+    voided: s.voided_at != null,
+    void_reason: (s.void_reason ?? null) as string | null,
   }));
 
   // Today row

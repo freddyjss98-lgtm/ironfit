@@ -28,10 +28,12 @@ export async function approveRenewalRequest(requestId: string) {
   if (planErr || !plan) throw new Error("Plan no encontrado");
 
   // Renovar: si tiene membresía vigente, extiende desde su fin; si no, desde hoy.
+  // Solo cuenta la activa — una cancelada no debe empujar la fecha de inicio.
   const { data: current } = await supabase
     .from("memberships")
     .select("end_date")
     .eq("member_id", req.member_id)
+    .eq("status", "active")
     .order("end_date", { ascending: false })
     .limit(1)
     .maybeSingle();

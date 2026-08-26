@@ -7,9 +7,15 @@
 // /admin/membresias como en la ficha del socio (/admin/miembros/[id]).
 // =============================================================================
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { toast } from "sonner";
-import { renewMembership, cancelMembership, updateMembership } from "./actions";
+import {
+  renewMembership,
+  cancelMembership,
+  updateMembership,
+  getMembershipSale,
+  type MembershipSale,
+} from "./actions";
 import { todayInEcuador } from "@/lib/date";
 
 export type Membership = {
@@ -63,22 +69,85 @@ function fmtLong(dateStr: string): string {
 
 // ── Modal: editar fechas de la membresía ───────────────────────────────────────
 
+/**
+ * Corrige una membresía mal registrada, en sitio.
+ *
+ * NO es "cambiar de plan": eso cancela la actual, crea una nueva y cobra otra
+ * vez. Esto es para el error de dedo — plan equivocado, monto mal tecleado,
+ * fechas corridas — y por eso ajusta la venta que ya existe en vez de crear otra.
+ */
 export function EditMembershipModal({
   membership,
+  plans,
   onClose,
 }: {
   membership: Membership;
+  plans: Plan[];
   onClose: () => void;
 }) {
   const [startDate, setStartDate] = useState(membership.start_date);
   const [endDate, setEndDate] = useState(membership.end_date);
+  const [planId, setPlanId] = useState(membership.plan_id);
+  const [amount, setAmount] = useState(String(membership.paid_amount));
+  const [method, setMethod] = useState("");
+  const [notes, setNotes] = useState("");
+  const [recalc, setRecalc] = useState(true);
+  const [sale, setSale] = useState<MembershipSale | null>(null);
+  const amountTouched = useRef(false);
   const [pending, startTransition] = useTransition();
+
+  const selectedPlan = plans.find((p) => p.id === planId);
+  const planChanged = planId !== membership.plan_id;
+  const suggestedEnd = selectedPlan
+    ? addDaysStr(startDate, selectedPlan.duration_days)
+    : endDate;
+
+  useEffect(() => {
+    let alive = true;
+    getMembershipSale(membership.id)
+      .then((s) => {
+        if (!alive) return;
+        setSale(s);
+        if (s) setMethod(s.payment_method);
+      })
+      .catch(() => alive && setSale(null));
+    return () => {
+      alive = false;
+    };
+  }, [membership.id]);
+
+  function applyPlan(id: string) {
+    setPlanId(id);
+    const p = plans.find((x) => x.id === id);
+    if (!p) return;
+    if (id === membership.plan_id) {
+      setEndDate(membership.end_date);
+      if (!amountTouched.current) setAmount(String(membership.paid_amount));
+      return;
+    }
+    if (recalc) setEndDate(addDaysStr(startDate, p.duration_days));
+    // El precio del plan es solo una sugerencia: si ya tecleaste un monto, manda el tuyo.
+    if (!amountTouched.current) setAmount(String(p.price));
+  }
+
+  function applyRecalc(v: boolean) {
+    setRecalc(v);
+    if (!planChanged || !selectedPlan) return;
+    setEndDate(v ? addDaysStr(startDate, selectedPlan.duration_days) : membership.end_date);
+  }
 
   function handleSave() {
     startTransition(async () => {
       try {
-        await updateMembership(membership.id, startDate, endDate);
-        toast.success("Fechas actualizadas");
+        await updateMembership(membership.id, {
+          startDate,
+          endDate,
+          planId,
+          paidAmount: parseFloat(amount) || 0,
+          paymentMethod: sale ? method : undefined,
+          notes,
+        });
+        toast.success("Membresía actualizada");
         onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al actualizar");
@@ -88,9 +157,9 @@ export function EditMembershipModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md p-6">
+      <div className="bg-[#111] border border-line rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="font-display text-lg uppercase tracking-tight">Editar fechas</h2>
+          <h2 className="font-display text-lg uppercase tracking-tight">Editar membresía</h2>
           <button onClick={onClose} className="text-fg/40 hover:text-fg text-xl leading-none">
             ✕
           </button>
@@ -100,21 +169,122 @@ export function EditMembershipModal({
         </p>
 
         <div className="space-y-4">
+          {/* Plan */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-fg/50 text-xs uppercase tracking-wider">Fecha de inicio</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className={inputCls}
-            />
+            <label className="text-fg/50 text-xs uppercase tracking-wider">Plan</label>
+            <select value={planId} onChange={(e) => applyPlan(e.target.value)} className={inputCls}>
+              {plans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.duration_days} días · ${p.price.toFixed(2)}
+                </option>
+              ))}
+              {!plans.some((p) => p.id === membership.plan_id) && (
+                <option value={membership.plan_id}>{membership.plan_name} (plan inactivo)</option>
+              )}
+            </select>
           </div>
+
+          {planChanged && (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.07] p-3 space-y-2">
+              <p className="text-amber-300/90 text-xs leading-relaxed">
+                Se corrige esta misma membresía: no se crea otra ni se genera un cobro nuevo. Si
+                el socio de verdad cambió de plan, cierra esto y usa <strong>Cambiar plan</strong>.
+              </p>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={recalc}
+                  onChange={(e) => applyRecalc(e.target.checked)}
+                  className="mt-0.5 accent-accent"
+                />
+                <span className="text-xs text-fg/70">
+                  Ajustar la fecha de fin al nuevo plan
+                  {selectedPlan && (
+                    <span className="block text-fg/40 mt-0.5">
+                      {selectedPlan.duration_days} días → {fmtLong(suggestedEnd)}
+                    </span>
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* Fechas */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-fg/50 text-xs uppercase tracking-wider">Inicio</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-fg/50 text-xs uppercase tracking-wider">Fin</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          {/* Cobro */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-fg/50 text-xs uppercase tracking-wider">Monto cobrado</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={amount}
+                onChange={(e) => {
+                  amountTouched.current = true;
+                  setAmount(e.target.value);
+                }}
+                className={inputCls}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-fg/50 text-xs uppercase tracking-wider">Método</label>
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+                disabled={!sale}
+                className={`${inputCls} disabled:opacity-40`}
+              >
+                {Object.entries(METHOD_LABELS).map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {sale ? (
+            <p className="text-fg/35 text-xs">
+              Hay un cobro registrado de ${sale.total.toFixed(2)} el {sale.sale_date}. Al guardar
+              se corrige esa misma venta, no se crea otra.
+              {sale.item_count > 1 && " La venta trae más productos: solo se ajusta la parte de la membresía."}
+            </p>
+          ) : (
+            <p className="text-fg/35 text-xs">
+              Esta membresía no tiene una venta enlazada: el monto queda solo en su ficha.
+            </p>
+          )}
+
+          {/* Notas */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-fg/50 text-xs uppercase tracking-wider">Fecha de fin</label>
+            <label className="text-fg/50 text-xs uppercase tracking-wider">
+              Nota interna <span className="normal-case tracking-normal text-fg/25">(opcional)</span>
+            </label>
             <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ej: corregido, se registró Iron en vez de Iron Fit"
               className={inputCls}
             />
           </div>
@@ -150,6 +320,95 @@ const CANCEL_REASONS = [
   "Otro",
 ];
 
+const METHOD_LABELS: Record<string, string> = {
+  transfer: "Transferencia",
+  cash: "Efectivo",
+  card: "Tarjeta",
+  cxc: "Cuentas x Cobrar",
+  other: "Otro",
+};
+
+/**
+ * Ofrece anular el cobro de la membresía que se está cancelando.
+ *
+ * Solo aparece si hay una venta viva enlazada. El default se propone según el
+ * motivo — "Creada por error" es el único caso donde el cobro no debería existir;
+ * en "Solicitud del socio" o "Falta de pago" el socio sí usó días y la plata se
+ * queda. Si el usuario toca el check, su decisión manda sobre el default.
+ *
+ * Se comparte con el modal de /admin/miembros para no duplicar la regla.
+ */
+export function SaleVoidToggle({
+  membershipId,
+  reason,
+  checked,
+  onChange,
+}: {
+  membershipId: string;
+  reason: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const [sale, setSale] = useState<MembershipSale | null>(null);
+  const touched = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    getMembershipSale(membershipId)
+      .then((s) => alive && setSale(s))
+      .catch(() => alive && setSale(null));
+    return () => {
+      alive = false;
+    };
+  }, [membershipId]);
+
+  useEffect(() => {
+    if (!touched.current) {
+      onChange(reason === "Creada por error" && !!sale && sale.item_count === 1);
+    }
+  }, [reason, sale, onChange]);
+
+  if (!sale) return null;
+  const mixta = sale.item_count > 1;
+
+  return (
+    <label
+      className={`flex items-start gap-2.5 rounded-lg border p-3 ${
+        mixta
+          ? "border-line bg-white/[0.02] cursor-not-allowed"
+          : "border-line bg-white/5 cursor-pointer"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked && !mixta}
+        disabled={mixta}
+        onChange={(e) => {
+          touched.current = true;
+          onChange(e.target.checked);
+        }}
+        className="mt-0.5 accent-red-500 disabled:opacity-40"
+      />
+      <span className="text-xs leading-relaxed">
+        <span className="block text-fg">Anular también este cobro</span>
+        <span className="block text-fg/40 mt-0.5">
+          ${sale.total.toFixed(2)} · {sale.sale_date} ·{" "}
+          {METHOD_LABELS[sale.payment_method] ?? sale.payment_method}
+        </span>
+        {mixta ? (
+          <span className="block text-amber-400/80 mt-1">
+            La venta trae otros productos. Anúlala desde Ventas para no borrar cobros buenos.
+          </span>
+        ) : (
+          <span className="block text-fg/30 mt-1">
+            Sale de Contabilidad, pero queda registrada como anulada.
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
+
 export function CancelMembershipModal({
   membership,
   onClose,
@@ -159,14 +418,15 @@ export function CancelMembershipModal({
 }) {
   const [reason, setReason] = useState(CANCEL_REASONS[0]);
   const [note, setNote] = useState("");
+  const [voidSale, setVoidSale] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function handleConfirm() {
     const finalReason = reason === "Otro" ? note.trim() || "Otro" : reason;
     startTransition(async () => {
       try {
-        await cancelMembership(membership.id, finalReason);
-        toast.success("Membresía cancelada");
+        await cancelMembership(membership.id, finalReason, voidSale);
+        toast.success(voidSale ? "Membresía cancelada y cobro anulado" : "Membresía cancelada");
         onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error al cancelar");
@@ -208,6 +468,13 @@ export function CancelMembershipModal({
             />
           </div>
         )}
+
+        <SaleVoidToggle
+          membershipId={membership.id}
+          reason={reason}
+          checked={voidSale}
+          onChange={setVoidSale}
+        />
 
         <p className="text-fg/40 text-xs">
           La membresía pasará a la lista de canceladas. No se elimina: conservas el historial.

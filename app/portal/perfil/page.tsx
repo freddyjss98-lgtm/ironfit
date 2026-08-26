@@ -25,6 +25,7 @@ export default async function PortalPerfilPage() {
       .from("vw_memberships_status")
       .select("effective_status, end_date, days_until_expiry, membership_plans(name)")
       .eq("member_id", member.id)
+      .in("status", ["active", "frozen", "expired"]) // cancelled/suspended: no
       .order("end_date", { ascending: false })
       .limit(1)
       .maybeSingle(),

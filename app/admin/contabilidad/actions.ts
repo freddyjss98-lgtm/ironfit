@@ -39,12 +39,13 @@ async function computeSnapshot(
   const sum = (k: string) =>
     rows.reduce((s, r) => s + (Number((r as Record<string, unknown>)[k]) || 0), 0);
 
-  // unique_members del mes (socios distintos con ventas)
+  // unique_members del mes (socios distintos con ventas; las anuladas no cuentan)
   const { data: saleMembers } = await supabase
     .from("sales")
     .select("member_id")
     .gte("sale_date", start)
     .lt("sale_date", end)
+    .is("voided_at", null)
     .not("member_id", "is", null);
   const uniqueMembers = new Set((saleMembers ?? []).map((s) => s.member_id)).size;
 
@@ -237,11 +238,13 @@ export async function getMonthSales(month: string): Promise<MonthSale[]> {
   if (!user) throw new Error("No autenticado");
 
   const [start, end] = monthBounds(month);
+  // Las anuladas no son ingreso: quedan fuera del detalle igual que de los totales.
   const { data, error } = await supabase
     .from("sales")
     .select("id, sale_date, total, discount, payment_method, notes, members(full_name)")
     .gte("sale_date", start)
     .lt("sale_date", end)
+    .is("voided_at", null)
     .order("sale_date", { ascending: false })
     .order("created_at", { ascending: false });
 

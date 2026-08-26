@@ -113,7 +113,7 @@ export type MembershipInfo = {
   planName: string | null;
   endDate: string | null; // 'YYYY-MM-DD'
   daysUntilExpiry: number | null;
-  membershipStatus: string; // 'active' | 'expired' | 'no_membership'
+  membershipStatus: string; // 'active' | 'frozen' | 'expired' | 'no_membership'
 };
 
 export function formatMembership(m: MembershipInfo): string {
@@ -123,6 +123,15 @@ export function formatMembership(m: MembershipInfo): string {
     return (
       `Hola ${m.firstName} 👋 No tengo una membresía activa registrada a tu ` +
       `nombre. Acércate a recepción o escribe *asesor* para renovar. 💪`
+    );
+  }
+
+  // Congelada: está en pausa, su fecha de fin se corre al reanudarla. No tiene
+  // sentido decirle "vence el X" ni "venció el X".
+  if (m.membershipStatus === "frozen") {
+    return (
+      `Hola ${m.firstName} 👋 Tu membresía ${plan} está *congelada* (en pausa). ` +
+      `Cuando quieras reanudarla escribe *asesor* y te sumamos los días pausados. ❄️`
     );
   }
 

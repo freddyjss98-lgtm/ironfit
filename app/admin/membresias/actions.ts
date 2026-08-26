@@ -306,21 +306,153 @@ export async function resumeMembership(membershipId: string) {
   revalidatePath("/admin");
 }
 
-export async function cancelMembership(membershipId: string, reason?: string) {
+// ── Cancelar (opcionalmente anulando el cobro) ────────────────────────────────
+
+export type MembershipSale = {
+  id: string;
+  sale_date: string;
+  total: number;
+  payment_method: string;
+  /** Ítems de la venta. Si es > 1 la venta trae también productos. */
+  item_count: number;
+};
+
+/**
+ * Venta ligada a una membresía, vía `sale_items.membership_id`. Devuelve null si
+ * no hay cobro registrado o si ya está anulado — en ambos casos no hay nada que
+ * ofrecer al cancelar.
+ */
+export async function getMembershipSale(
+  membershipId: string
+): Promise<MembershipSale | null> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const { data: item } = await supabase
+    .from("sale_items")
+    .select("sale_id")
+    .eq("membership_id", membershipId)
+    .maybeSingle();
+  if (!item?.sale_id) return null;
+
+  const { data: sale } = await supabase
+    .from("sales")
+    .select("id, sale_date, total, payment_method, voided_at")
+    .eq("id", item.sale_id)
+    .maybeSingle();
+  if (!sale || sale.voided_at) return null;
+
+  const { count } = await supabase
+    .from("sale_items")
+    .select("id", { count: "exact", head: true })
+    .eq("sale_id", sale.id);
+
+  return {
+    id: sale.id as string,
+    sale_date: sale.sale_date as string,
+    total: Number(sale.total) || 0,
+    payment_method: sale.payment_method as string,
+    item_count: count ?? 1,
+  };
+}
+
+/**
+ * Cancela una membresía y, si `voidSale` es true, anula su cobro.
+ *
+ * La venta NO se borra: se marca anulada (quién, cuándo, por qué) y las vistas
+ * `vw_daily_sales` / `vw_monthly_sales` la ignoran, que es lo que la saca de
+ * Contabilidad. Ver 20260827000000_sales_void.sql.
+ *
+ * Se valida todo ANTES de escribir, y si la cancelación falla se revierte la
+ * anulación: nunca debe quedar plata anulada con la membresía viva.
+ */
+export async function cancelMembership(
+  membershipId: string,
+  reason?: string,
+  voidSale = false
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const finalReason = reason?.trim() || null;
+  let voidedSaleId: string | null = null;
+
+  if (voidSale) {
+    const sale = await getMembershipSale(membershipId);
+    if (!sale) throw new Error("Esta membresía no tiene un cobro por anular");
+    if (sale.item_count > 1) {
+      throw new Error(
+        "La venta incluye otros productos: anúlala desde Ventas para no borrar cobros buenos"
+      );
+    }
+
+    // Anular es mover plata: solo admin (el RLS de `sales` también lo exige).
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (me?.role !== "admin") {
+      throw new Error("Solo un admin puede anular un cobro");
+    }
+
+    // Un mes cerrado tiene los totales congelados: no se toca por detrás.
+    const ym = sale.sale_date.slice(0, 7);
+    const { data: close } = await supabase
+      .from("monthly_close")
+      .select("is_closed")
+      .eq("month", `${ym}-01`)
+      .maybeSingle();
+    if (close?.is_closed) {
+      throw new Error(`El mes ${ym} ya está cerrado: reábrelo para anular este cobro`);
+    }
+
+    const { data: voided, error: voidError } = await supabase
+      .from("sales")
+      .update({
+        voided_at: new Date().toISOString(),
+        voided_by: user.id,
+        void_reason: `Membresía cancelada: ${finalReason ?? "sin motivo"}`,
+      })
+      .eq("id", sale.id)
+      .is("voided_at", null)
+      .select("id");
+
+    if (voidError) throw new Error(voidError.message);
+    if (!voided?.length) throw new Error("No se pudo anular el cobro");
+    voidedSaleId = sale.id;
+  }
 
   const { error } = await supabase
     .from("memberships")
     .update({
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
-      cancellation_reason: reason?.trim() || null,
+      cancellation_reason: finalReason,
     })
     .eq("id", membershipId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (voidedSaleId) {
+      // Deshacer la anulación: la membresía sigue viva, su cobro también debe.
+      await supabase
+        .from("sales")
+        .update({ voided_at: null, voided_by: null, void_reason: null })
+        .eq("id", voidedSaleId);
+    }
+    throw new Error(error.message);
+  }
+
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/miembros");
+  revalidatePath("/admin/ventas");
+  revalidatePath("/admin/contabilidad");
   revalidatePath("/admin");
 }
 
@@ -452,28 +584,161 @@ export async function changeMembershipPlan(currentMembershipId: string, formData
 
 // ── Editar fechas de una membresía existente ───────────────────────────────────
 
+export type UpdateMembershipInput = {
+  startDate: string;
+  endDate: string;
+  planId: string;
+  paidAmount: number;
+  paymentMethod?: string;
+  notes?: string | null;
+};
+
+/**
+ * Corrige una membresía EN SITIO: plan, fechas, monto y notas.
+ *
+ * Es lo contrario de `changeMembershipPlan`. Aquí no se cancela nada ni se crea
+ * una membresía nueva — esto es para cuando se registró mal (plan equivocado,
+ * monto mal tecleado), no para un cambio comercial de plan. Por eso tampoco
+ * genera una venta nueva: si el monto o el plan cambian, se AJUSTA la venta que
+ * ya existe, para que Contabilidad no quede descuadrada ni duplicada.
+ */
 export async function updateMembership(
   membershipId: string,
-  startDate: string,
-  endDate: string
+  input: UpdateMembershipInput
 ) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const { startDate, endDate, planId, paidAmount, paymentMethod } = input;
 
   if (!startDate || !endDate) throw new Error("Las fechas son obligatorias");
   if (new Date(endDate) < new Date(startDate)) {
     throw new Error("La fecha de fin no puede ser anterior a la de inicio");
   }
+  if (!planId) throw new Error("Elige un plan");
+  if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+    throw new Error("El monto cobrado no es válido");
+  }
+
+  const { data: current, error: readError } = await supabase
+    .from("memberships")
+    .select("plan_id, paid_amount, start_date, end_date")
+    .eq("id", membershipId)
+    .single();
+  if (readError || !current) throw new Error("Membresía no encontrada");
+
+  const { data: plan, error: planError } = await supabase
+    .from("membership_plans")
+    .select("name, duration_days")
+    .eq("id", planId)
+    .single();
+  if (planError || !plan) throw new Error("Plan no encontrado");
+
+  const planChanged = planId !== current.plan_id;
+  const amountChanged = Number(current.paid_amount) !== paidAmount;
+
+  // ── Sincronizar la venta enlazada ──────────────────────────────────────────
+  if (planChanged || amountChanged || paymentMethod) {
+    const { data: item } = await supabase
+      .from("sale_items")
+      .select("id, sale_id, description, quantity")
+      .eq("membership_id", membershipId)
+      .maybeSingle();
+
+    if (item?.sale_id) {
+      const { data: sale } = await supabase
+        .from("sales")
+        .select("id, sale_date, payment_method, notes, voided_at")
+        .eq("id", item.sale_id)
+        .maybeSingle();
+
+      // Una venta anulada ya no cuenta: se deja quieta.
+      if (sale && !sale.voided_at) {
+        const methodChanged = !!paymentMethod && paymentMethod !== sale.payment_method;
+
+        if (amountChanged || methodChanged) {
+          const { data: me } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (me?.role !== "admin") {
+            throw new Error("Solo un admin puede corregir el cobro de una membresía");
+          }
+
+          const ym = (sale.sale_date as string).slice(0, 7);
+          const { data: close } = await supabase
+            .from("monthly_close")
+            .select("is_closed")
+            .eq("month", `${ym}-01`)
+            .maybeSingle();
+          if (close?.is_closed) {
+            throw new Error(`El mes ${ym} ya está cerrado: reábrelo para corregir este cobro`);
+          }
+        }
+
+        // El ítem conserva su sufijo (" — Renovación") si lo tenía.
+        const desc = (item.description as string) ?? "";
+        const sep = desc.indexOf(" — ");
+        const suffix = sep >= 0 ? desc.slice(sep) : "";
+
+        // `subtotal` NO se escribe: es una columna generada (quantity * unit_price).
+        await supabase
+          .from("sale_items")
+          .update({
+            description: `${plan.name} (${plan.duration_days} días)${suffix}`,
+            unit_price: paidAmount,
+          })
+          .eq("id", item.id);
+
+        // El total de la venta se recalcula desde sus ítems: así una venta mixta
+        // (membresía + productos) queda bien sin tocar los otros cobros.
+        const { data: allItems } = await supabase
+          .from("sale_items")
+          .select("quantity, unit_price")
+          .eq("sale_id", sale.id);
+        const newTotal = (allItems ?? []).reduce(
+          (s, i) => s + (Number(i.quantity) || 1) * (Number(i.unit_price) || 0),
+          0
+        );
+
+        const saleUpdate: Record<string, unknown> = { total: newTotal };
+        if (methodChanged) saleUpdate.payment_method = paymentMethod;
+        // "Membresía: X" / "Renovación: X" en la lista de Ventas debe seguir al plan.
+        const saleNotes = (sale.notes as string | null) ?? "";
+        const m = saleNotes.match(/^(Membresía|Renovación):\s/);
+        if (m) saleUpdate.notes = `${m[1]}: ${plan.name}`;
+
+        await supabase.from("sales").update(saleUpdate).eq("id", sale.id);
+      }
+    }
+  }
 
   const { error } = await supabase
     .from("memberships")
-    .update({ start_date: startDate, end_date: endDate })
+    .update({
+      start_date: startDate,
+      end_date: endDate,
+      plan_id: planId,
+      paid_amount: paidAmount,
+      notes: input.notes?.trim() || null,
+    })
     .eq("id", membershipId);
 
   if (error) throw new Error(error.message);
 
-  await notifyMembershipActivated(membershipId);
+  // Solo se avisa al socio si cambió algo que le afecta (su plan o su vencimiento),
+  // no por corregir un monto o una nota interna.
+  if (planChanged || endDate !== current.end_date) {
+    await notifyMembershipActivated(membershipId);
+  }
 
   revalidatePath("/admin/membresias");
   revalidatePath("/admin/miembros");
+  revalidatePath("/admin/ventas");
+  revalidatePath("/admin/contabilidad");
   revalidatePath("/admin");
 }
