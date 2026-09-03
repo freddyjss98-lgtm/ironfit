@@ -7,7 +7,10 @@ export async function createPlan(formData: FormData) {
   const supabase = await createClient();
 
   const { error } = await supabase.from("membership_plans").insert({
-    name: formData.get("name") as string,
+    // .trim(): un espacio al final rompe la negrita de WhatsApp — la plantilla
+    // manda *{{plan}}* y "*Iron *" no cierra, así que el asterisco queda suelto
+    // y la negrita se estira hasta el siguiente. Pasó con Iron, Neón Run y Plan Amigos.
+    name: (formData.get("name") as string)?.trim(),
     description: (formData.get("description") as string) || null,
     price: parseFloat(formData.get("price") as string),
     duration_days: parseInt(formData.get("duration_days") as string, 10),
@@ -24,7 +27,7 @@ export async function updatePlan(id: string, formData: FormData) {
   const { error } = await supabase
     .from("membership_plans")
     .update({
-      name: formData.get("name") as string,
+      name: (formData.get("name") as string)?.trim(),
       description: (formData.get("description") as string) || null,
       price: parseFloat(formData.get("price") as string),
       duration_days: parseInt(formData.get("duration_days") as string, 10),

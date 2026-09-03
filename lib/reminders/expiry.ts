@@ -69,9 +69,23 @@ function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] ?? fullName;
 }
 
+/**
+ * Nombre de plan listo para meter en un mensaje.
+ *
+ * El .trim() no es cosmético: los mensajes envuelven el plan en asteriscos
+ * (*{{2}}*) y WhatsApp no cierra la negrita si hay un espacio antes del
+ * asterisco. Con el plan "Iron " el socio recibía
+ *   "Tu plan *Iron * en Iron Fit Club quedó activo hasta el *3 de octubre*"
+ * con la negrita corrida hasta la fecha. Se limpió el dato y se limpia también
+ * aquí, porque el nombre puede volver a llegar sucio desde cualquier lado.
+ */
+export function planLabel(name: string | null | undefined): string {
+  return name?.trim() || "actual";
+}
+
 /** Texto legible del recordatorio (para registro y para modo dry-run). */
 export function buildExpiryMessage(c: ExpiryCandidate): string {
-  const plan = c.current_plan_name ? ` *${c.current_plan_name}*` : "";
+  const plan = c.current_plan_name ? ` *${planLabel(c.current_plan_name)}*` : "";
   const fecha = formatSpanishDate(c.current_end_date);
   return (
     `Hola ${firstName(c.full_name)}! 👋 Tu membresía${plan} en Iron Fit Club ` +
@@ -98,7 +112,7 @@ export function buildExpiryTemplate(c: ExpiryCandidate): TemplateMessage {
     languageCode: process.env.WHATSAPP_TEMPLATE_LANG ?? "es",
     bodyParams: [
       firstName(c.full_name),
-      c.current_plan_name ?? "actual",
+      planLabel(c.current_plan_name),
       formatSpanishDate(c.current_end_date),
     ],
   };

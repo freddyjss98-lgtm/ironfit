@@ -25,10 +25,22 @@ export type SendResult = {
   error?: string;
 };
 
-/** Normaliza un teléfono a formato internacional Ecuador sin '+' (ej: 593999123456). */
+/**
+ * Normaliza un teléfono a formato internacional sin '+' (ej: 593999123456).
+ *
+ * Asume Ecuador SALVO que el número venga escrito en internacional. Antes no
+ * hacía esa distinción y le anteponía 593 a cualquier cosa: el número español
+ * de una socia (+34 674 95 81 18) salía como 59334674958118 y nunca llegaba.
+ */
 export function normalizePhoneEC(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
+  const raw = (phone ?? "").trim();
+  const digits = raw.replace(/\D/g, "");
   if (!digits) return "";
+
+  // Ya trae su código de país: se respeta tal cual.
+  if (raw.startsWith("+")) return digits;
+  if (digits.startsWith("00")) return digits.slice(2);
+
   if (digits.startsWith("593")) return digits;
   if (digits.startsWith("0")) return "593" + digits.slice(1);
   return "593" + digits;

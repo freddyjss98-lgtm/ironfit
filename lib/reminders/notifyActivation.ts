@@ -14,7 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWhatsappMode, sendWhatsapp, type SendResult } from "@/lib/whatsapp/send";
-import { formatSpanishDate } from "@/lib/reminders/expiry";
+import { formatSpanishDate, planLabel } from "@/lib/reminders/expiry";
 import {
   buildAdminCopyTemplate,
   ADMIN_PHONE,
@@ -100,7 +100,7 @@ export async function notifyMembershipActivated(membershipId: string): Promise<v
     if (!mem?.phone || !mb.end_date) return;
 
     const fn = firstName(mem.full_name);
-    const planName = plan?.name ?? "actual";
+    const planName = planLabel(plan?.name);
     const fecha = formatSpanishDate(mb.end_date);
     const ref = mb.end_date;
 

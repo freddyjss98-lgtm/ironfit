@@ -18,6 +18,7 @@ import {
   buildExpiryMessage,
   buildExpiryTemplate,
   formatSpanishDate,
+  planLabel,
   type ExpiryCandidate,
 } from "@/lib/reminders/expiry";
 
@@ -149,7 +150,7 @@ const expiredProcessor: ReminderProcessor = {
       .filter((r) => r.phone && r.end_date)
       .map((r) => {
         const fn = firstName(r.full_name);
-        const plan = r.plan_name ?? "actual";
+        const plan = planLabel(r.plan_name);
         const fecha = formatSpanishDate(r.end_date);
         return {
           memberId: r.member_id,
@@ -256,7 +257,7 @@ const activatedProcessor: ReminderProcessor = {
       const plan = one(r.membership_plans);
       if (!mem?.phone || !r.end_date) continue;
       const fn = firstName(mem.full_name);
-      const planName = plan?.name ?? "actual";
+      const planName = planLabel(plan?.name);
       const fecha = formatSpanishDate(r.end_date);
       out.push({
         memberId: r.member_id,
