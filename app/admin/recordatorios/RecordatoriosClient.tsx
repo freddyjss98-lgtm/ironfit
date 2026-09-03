@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import NewMembershipForm from "../membresias/NewMembershipForm";
 import WhatsAppIcon from "@/app/_components/WhatsAppIcon";
+import EnviosLog, { type LogRow } from "./EnviosLog";
 import {
   waLink,
   expiryMessage,
@@ -10,6 +11,27 @@ import {
   noMembershipMessage,
   winBackMessage as inactiveMessage,
 } from "@/lib/whatsapp";
+
+function TabBtn({
+  activa,
+  onClick,
+  children,
+}: {
+  activa: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+        activa ? "border-accent text-fg" : "border-transparent text-fg/40 hover:text-fg/70"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 type Member = {
   id: string;
@@ -25,7 +47,7 @@ type Member = {
 
 type Plan = { id: string; name: string; price: number; duration_days: number; color: string };
 
-type Props = { members: Member[]; plans: Plan[] };
+type Props = { members: Member[]; plans: Plan[]; logs: LogRow[] };
 
 const today = new Date();
 today.setHours(0, 0, 0, 0);
@@ -59,9 +81,23 @@ function scrollToSection(id: string) {
 
 const INACTIVE_DAYS = 10;
 
-export default function RecordatoriosClient({ members, plans }: Props) {
+export default function RecordatoriosClient({ members, plans, logs }: Props) {
   const [sent, setSent] = useState<Set<string>>(new Set());
   const [activateMember, setActivateMember] = useState<Member | null>(null);
+  const [vista, setVista] = useState<"pendientes" | "historial">("pendientes");
+
+  // Fallos de HOY: se muestran en la pestaña aunque estés en la otra vista.
+  // Es la señal que faltó cuando 653 avisos fallaron durante dos meses.
+  const fallosHoy = useMemo(() => {
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil" }).format(new Date());
+    return logs.filter(
+      (l) =>
+        l.status === "failed" &&
+        new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil" }).format(
+          new Date(l.created_at)
+        ) === hoy
+    ).length;
+  }, [logs]);
 
   const {
     urgent,
@@ -136,8 +172,28 @@ export default function RecordatoriosClient({ members, plans }: Props) {
     setSent((prev) => new Set(prev).add(id));
   }
 
+
   return (
     <div className="space-y-6">
+      {/* ── Pestañas: a quién avisar a mano vs qué envió el sistema solo ───── */}
+      <div className="flex gap-1 border-b border-line">
+        <TabBtn activa={vista === "pendientes"} onClick={() => setVista("pendientes")}>
+          Por avisar
+        </TabBtn>
+        <TabBtn activa={vista === "historial"} onClick={() => setVista("historial")}>
+          Historial de envíos
+          {fallosHoy > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+              {fallosHoy}
+            </span>
+          )}
+        </TabBtn>
+      </div>
+
+      {vista === "historial" && <EnviosLog logs={logs} />}
+
+      {vista === "pendientes" && (
+      <div className="space-y-6">
       {/* Summary bar — cada tarjeta baja a su sección */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryCard
@@ -292,6 +348,8 @@ export default function RecordatoriosClient({ members, plans }: Props) {
         getMessage={(m) => noMembershipMessage(m.full_name)}
         getMeta={() => "Sin membresía"}
       />
+      </div>
+      )}
 
       {/* Modal: activar membresía (reutiliza el formulario de Membresías) */}
       {activateMember && (
