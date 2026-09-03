@@ -2,8 +2,12 @@
 // Webhook de WhatsApp Cloud API — bot conversacional para socios
 // =============================================================================
 // GET  → handshake de verificación de Meta (al configurar el webhook).
-// POST → mensajes entrantes de los socios. Valida la firma de Meta, extrae los
-//        mensajes y los procesa (responde por menú). Ver lib/whatsapp/bot/.
+// POST → dos cosas, en el mismo campo "messages" de la suscripción:
+//        • mensajes entrantes de los socios → los responde el bot (lib/whatsapp/bot/)
+//        • estados de entrega de lo que NOSOTROS enviamos → actualizan
+//          reminder_log (lib/whatsapp/statuses.ts). Antes se descartaban, y por
+//          eso el log marcó tres días de envíos perfectos mientras el método de
+//          pago de Meta estaba caído y no llegaba nada.
 //
 // Requisitos en Meta para recibir mensajes REALES:
 //   • App PUBLICADA (no en modo desarrollo).
@@ -17,6 +21,7 @@ import { NextRequest } from "next/server";
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processInboundMessage, type InboundMessage } from "@/lib/whatsapp/bot/handle";
+import { extractStatuses, applyStatusEvent } from "@/lib/whatsapp/statuses";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,14 +59,32 @@ export async function POST(req: NextRequest) {
   }
 
   const messages = extractMessages(payload);
+  const statuses = extractStatuses(payload);
 
-  // Sin mensajes (ej. recibos de entrega/lectura) → 200 y listo.
-  if (messages.length === 0) {
-    return Response.json({ ok: true, processed: 0 });
+  if (messages.length === 0 && statuses.length === 0) {
+    return Response.json({ ok: true, processed: 0, statuses: 0 });
   }
 
   const supabase = createAdminClient();
   let processed = 0;
+  let statusesApplied = 0;
+
+  // ── Estados de entrega ──────────────────────────────────────────────────
+  // Antes se descartaban. Son la única forma de saber si un mensaje LLEGÓ:
+  // la API responde 200 al aceptarlo, no al entregarlo. Ver lib/whatsapp/statuses.ts.
+  for (const ev of statuses) {
+    try {
+      if (await applyStatusEvent(supabase, ev)) statusesApplied++;
+      if (ev.status === "failed") {
+        console.error(
+          `[whatsapp:webhook] Meta rechazó ${ev.waMessageId}: ` +
+            `${ev.errorCode ?? "?"} ${ev.errorTitle ?? ""}`
+        );
+      }
+    } catch (err) {
+      console.error("[whatsapp:webhook] error aplicando estado", err);
+    }
+  }
 
   for (const msg of messages) {
     try {
@@ -73,7 +96,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return Response.json({ ok: true, processed });
+  return Response.json({ ok: true, processed, statuses: statusesApplied });
 }
 
 /**
