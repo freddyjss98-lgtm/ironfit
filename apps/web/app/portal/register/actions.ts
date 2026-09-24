@@ -2,66 +2,33 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { isValidCedula, normalizeCedula } from "@ironfit/shared/cedula";
+import { registerMember as register } from "@/lib/services/registration";
 
 export async function registerMember(formData: FormData) {
-  const fullName = (formData.get("full_name") as string)?.trim();
-  const phone = (formData.get("phone") as string)?.trim();
-  const email = (formData.get("email") as string)?.trim();
-  const password = formData.get("password") as string;
-  const birthday = (formData.get("birthday") as string) || "";
-  const gender = (formData.get("gender") as string) || "";
-  const cedula = normalizeCedula((formData.get("cedula") as string) || "");
-
-  if (!fullName || !phone || !email || !password || !birthday || !gender || !cedula) {
-    redirect(
-      `/portal/register?error=${encodeURIComponent("Completa todos los campos obligatorios")}`
-    );
-  }
-
-  if (!isValidCedula(cedula)) {
-    redirect(
-      `/portal/register?error=${encodeURIComponent("La cédula ingresada no es válida")}`
-    );
-  }
-
   const supabase = await createClient();
 
-  // La cédula es única: avisar antes de crear la cuenta si ya está registrada.
-  const { data: disponible } = await supabase.rpc("cedula_disponible", {
-    p_cedula: cedula,
-  });
-  if (disponible === false) {
-    redirect(
-      `/portal/register?error=${encodeURIComponent("Esa cédula ya está registrada")}`
-    );
+  let hasSession = false;
+  let error: string | null = null;
+  try {
+    const { session } = await register(supabase, {
+      fullName: (formData.get("full_name") as string) ?? "",
+      phone: (formData.get("phone") as string) ?? "",
+      email: (formData.get("email") as string) ?? "",
+      password: (formData.get("password") as string) ?? "",
+      birthday: (formData.get("birthday") as string) ?? "",
+      gender: (formData.get("gender") as string) ?? "",
+      cedula: (formData.get("cedula") as string) ?? "",
+    });
+    hasSession = !!session;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "No se pudo crear la cuenta";
   }
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
-        phone: phone,
-        birthday: birthday,
-        gender: gender,
-        cedula: cedula,
-        is_self_register: true,
-      },
-    },
-  });
-
-  if (error) {
-    redirect(
-      `/portal/register?error=${encodeURIComponent(error.message)}`
-    );
-  }
+  // redirect() lanza una excepción propia de Next: va fuera del try.
+  if (error) redirect(`/portal/register?error=${encodeURIComponent(error)}`);
 
   // Si hay sesión activa (confirmación de email desactivada) → directo al portal
-  if (data.session) {
-    redirect("/portal");
-  }
+  if (hasSession) redirect("/portal");
 
   // Si requiere confirmación de email
   redirect("/portal/register?confirm=1");

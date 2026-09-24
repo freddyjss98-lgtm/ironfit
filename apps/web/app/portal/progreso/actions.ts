@@ -89,44 +89,13 @@ export async function setMyWeightGoal(target: number | null) {
   revalidatePath("/portal");
 }
 
-// El socio registra su asistencia de hoy: 1 vez al día, requiere membresía activa.
+// El socio registra su asistencia de hoy: 1 vez al día, requiere membresía
+// activa. Las reglas viven en la RPC `member_check_in` (la usa también la app).
 export async function addMyAttendance() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
 
-  const { data: member, error: mErr } = await supabase
-    .from("members")
-    .select("id")
-    .eq("user_id", user.id)
-    .single();
-  if (mErr || !member) throw new Error("Perfil de miembro no encontrado");
-
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Guayaquil" });
-  const { data: activeMembership } = await supabase
-    .from("memberships")
-    .select("id")
-    .eq("member_id", member.id)
-    .eq("status", "active")
-    .gte("end_date", today)
-    .limit(1)
-    .maybeSingle();
-  if (!activeMembership) {
-    throw new Error("Necesitas una membresía activa para registrar tu asistencia.");
-  }
-
-  const { error } = await supabase.from("attendances").insert({
-    member_id: member.id,
-    membership_id: activeMembership.id,
-    checked_in_by: user.id,
-  });
-
-  if (error) {
-    if (error.code === "23505") throw new Error("Ya registraste tu asistencia hoy");
-    throw new Error(error.message);
-  }
+  const { error } = await supabase.rpc("member_check_in");
+  if (error) throw new Error(error.message);
 
   revalidatePath("/portal/progreso");
   revalidatePath("/portal");

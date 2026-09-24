@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { signReceiptUrls } from "@/lib/receipts";
 import RenovacionesClient from "./RenovacionesClient";
 
 export default async function RenovacionesPage() {
@@ -16,11 +17,15 @@ export default async function RenovacionesPage() {
   ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = ((requests ?? []) as any[]).map((r) => ({
+  const raw = (requests ?? []) as any[];
+  // Comprobantes en bucket privado: se muestran con URL firmada.
+  const receiptUrls = await signReceiptUrls(supabase, raw.map((r) => r.receipt_url));
+
+  const rows = raw.map((r, i) => ({
     id: r.id as string,
     amount: Number(r.amount ?? 0),
     payment_method: r.payment_method as string,
-    receipt_url: (r.receipt_url ?? null) as string | null,
+    receipt_url: receiptUrls[i],
     member_note: (r.member_note ?? null) as string | null,
     admin_note: (r.admin_note ?? null) as string | null,
     status: r.status as string,

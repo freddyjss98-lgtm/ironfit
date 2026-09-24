@@ -24,6 +24,8 @@ import {
   REMINDER_TYPE_ADMIN_COPY,
   type ReminderCandidate,
 } from "@/lib/reminders/processors";
+import { REMINDER_TYPE_EXPIRY } from "@/lib/reminders/expiry";
+import { pushToMember } from "@/lib/push/expo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -121,6 +123,17 @@ export async function GET(req: NextRequest) {
         continue;
       }
       sent++;
+
+      // Membresía por vencer: también a la app, con el mismo texto (sin el
+      // formato *negrita* de WhatsApp). Va aquí para heredar la idempotencia
+      // del log: si el WhatsApp falló, mañana se reintenta todo junto.
+      if (processor.type === REMINDER_TYPE_EXPIRY) {
+        await pushToMember(c.memberId, {
+          title: "Tu membresía está por vencer",
+          body: c.previewText.replace(/\*/g, ""),
+          data: { screen: "renew" },
+        });
+      }
 
       // ── Copia al admin, en el mismo momento que se envió al socio ─────────
       const copy = await sendWhatsapp({

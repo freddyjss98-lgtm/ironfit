@@ -1,8 +1,11 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "./server";
 import { todayInEcuador, addDays } from "@ironfit/shared/date";
 
-export async function getDashboardStats() {
-  const supabase = await createClient();
+// Sin cliente usa la sesión por cookies (panel web); la API de la app le pasa
+// el cliente del token.
+export async function getDashboardStats(client?: SupabaseClient) {
+  const supabase = client ?? (await createClient());
 
   const today = todayInEcuador();
   const startOfMonth = today.slice(0, 7) + "-01";

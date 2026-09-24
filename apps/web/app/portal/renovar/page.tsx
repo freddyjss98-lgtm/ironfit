@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { signReceiptUrls } from "@/lib/receipts";
 import { redirect } from "next/navigation";
 import { site } from "@/app/content";
 import RenewForm from "./RenewForm";
@@ -89,13 +90,15 @@ export default async function PortalRenovarPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pr = pendingReq as any;
+  // Comprobante en bucket privado: el socio lo ve con URL firmada.
+  const [pendingReceiptUrl] = pr ? await signReceiptUrls(supabase, [pr.receipt_url]) : [null];
   const pending = pr
     ? {
         id: pr.id as string,
         plan_name: (pr.membership_plans?.name ?? "Plan") as string,
         amount: Number(pr.amount ?? 0),
         payment_method: pr.payment_method as string,
-        receipt_url: (pr.receipt_url ?? null) as string | null,
+        receipt_url: pendingReceiptUrl,
         created_at: pr.created_at as string,
       }
     : null;
