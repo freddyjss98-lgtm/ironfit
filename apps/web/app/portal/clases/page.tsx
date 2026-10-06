@@ -34,7 +34,7 @@ export default async function PortalClasesPage() {
   // Ventana visible: hoy + los próximos 6 días (7 en total)
   const windowEnd = addDays(today, 6);
 
-  const [memberRes, schedulesRes] = await Promise.all([
+  const [memberRes, schedulesRes, closuresRes] = await Promise.all([
     supabase.from("members").select("id, full_name").eq("user_id", user.id).maybeSingle(),
     supabase
       .from("class_schedules")
@@ -42,7 +42,16 @@ export default async function PortalClasesPage() {
       .eq("active", true)
       .order("day_of_week")
       .order("start_time"),
+    // Días que el gym no abre (feriados): no se reserva.
+    supabase
+      .from("gym_closures")
+      .select("closure_date, reason")
+      .gte("closure_date", today)
+      .lte("closure_date", windowEnd),
   ]);
+
+  const closedDays: Record<string, string> = {};
+  for (const c of closuresRes.data ?? []) closedDays[c.closure_date as string] = c.reason as string;
 
   const memberId = memberRes.data?.id ?? null;
 
@@ -173,6 +182,7 @@ export default async function PortalClasesPage() {
       hasActiveMembership={hasActiveMembership}
       today={today}
       wodByDate={wodByDate}
+      closedDays={closedDays}
     />
   );
 }

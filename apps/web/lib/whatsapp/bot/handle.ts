@@ -20,6 +20,7 @@ import {
   formatWod,
   handoffText,
   noClassesToBookText,
+  gymClosedTodayText,
   bookingPromptText,
   bookingInvalidText,
   bookingConfirmedText,
@@ -102,6 +103,16 @@ async function getClassesForBooking(
     .order("start_time", { ascending: true });
 
   return (data ?? []) as BookableClass[];
+}
+
+/** Motivo del cierre si el gym no abre ese día (ver /admin/feriados). */
+async function getClosureReason(supabase: SupabaseClient, ymd: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("gym_closures")
+    .select("reason")
+    .eq("closure_date", ymd)
+    .maybeSingle();
+  return (data?.reason as string | undefined) ?? null;
 }
 
 /** Cupos ocupados (confirmados/asistidos) de una clase en una fecha. */
@@ -328,8 +339,11 @@ export async function processInboundMessage(
       break;
     }
     case "classes": {
-      const { dow, dayLabel } = ecuadorToday();
-      text = formatClasses(await getTodayClasses(supabase, dow), dayLabel);
+      const { dow, ymd, dayLabel } = ecuadorToday();
+      const closedReason = await getClosureReason(supabase, ymd);
+      text = closedReason
+        ? gymClosedTodayText(dayLabel, closedReason)
+        : formatClasses(await getTodayClasses(supabase, dow), dayLabel);
       break;
     }
     case "wod": {
@@ -339,6 +353,11 @@ export async function processInboundMessage(
     }
     case "book": {
       const { dow, ymd, dayLabel } = ecuadorToday();
+      const closedReason = await getClosureReason(supabase, ymd);
+      if (closedReason) {
+        text = gymClosedTodayText(dayLabel, closedReason) + navFooter();
+        break;
+      }
       const classes = await getClassesForBooking(supabase, dow);
       if (classes.length === 0) {
         text = noClassesToBookText(dayLabel) + navFooter();

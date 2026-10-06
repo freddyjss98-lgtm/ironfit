@@ -39,6 +39,8 @@ type Props = {
   hasActiveMembership: boolean;
   today: string;
   wodByDate: Record<string, string>;
+  /** Fecha → motivo, para los días que el gym no abre. */
+  closedDays: Record<string, string>;
 };
 
 const WOD_CONTENT_CLS =
@@ -96,8 +98,10 @@ export default function PortalClasesClient({
   hasActiveMembership,
   today,
   wodByDate,
+  closedDays,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(today);
+  const selectedClosedReason = closedDays[selectedDate];
 
   // 7 días: hoy + los próximos 6
   const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i));
@@ -159,24 +163,32 @@ export default function PortalClasesClient({
               (b) => b.booking_date === date && b.status === "confirmed"
             ).length;
             const hasClasses = schedules.some((s) => s.day_of_week === dow);
+            const isClosed = Boolean(closedDays[date]);
             return (
               <button
                 key={date}
                 onClick={() => setSelectedDate(date)}
                 className={`flex flex-col items-center gap-1 px-1 py-3 rounded-xl border text-xs transition-colors ${
                   isSelected
-                    ? "bg-accent text-white border-accent"
-                    : isToday
-                      ? "bg-accent/10 text-accent border-accent/30"
-                      : hasClasses
-                        ? "bg-white/5 text-fg/60 border-line hover:text-fg"
-                        : "bg-white/[0.02] text-fg/25 border-line/30"
+                    ? isClosed
+                      ? "bg-red-500/25 text-red-200 border-red-400/50"
+                      : "bg-accent text-white border-accent"
+                    : isClosed
+                      ? "bg-red-500/10 text-red-300/70 border-red-400/20"
+                      : isToday
+                        ? "bg-accent/10 text-accent border-accent/30"
+                        : hasClasses
+                          ? "bg-white/5 text-fg/60 border-line hover:text-fg"
+                          : "bg-white/[0.02] text-fg/25 border-line/30"
                 }`}
               >
                 <span className="font-semibold">{DAY_SHORT[dow]}</span>
                 <span className={`text-xs ${isSelected ? "text-white/70" : "text-fg/40"}`}>
                   {d.getDate()} {MONTH_SHORT[d.getMonth()]}
                 </span>
+                {isClosed && (
+                  <span className="text-[9px] uppercase tracking-wider font-semibold">Cerrado</span>
+                )}
                 {myCount > 0 && (
                   <span
                     className={`w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold ${
@@ -206,10 +218,18 @@ export default function PortalClasesClient({
       </div>
 
       {/* Planificación del día (encima de las clases) */}
-      <DayWod content={wodByDate[selectedDate]} />
+      {!selectedClosedReason && <DayWod content={wodByDate[selectedDate]} />}
 
       {/* Classes */}
-      {daySchedules.length === 0 ? (
+      {selectedClosedReason ? (
+        <div className="bg-red-500/10 border border-red-400/30 rounded-2xl px-6 py-10 text-center">
+          <p className="text-red-200 font-semibold">El gimnasio no abre este día</p>
+          <p className="text-fg/50 text-sm mt-1">{selectedClosedReason}</p>
+          <p className="text-fg/40 text-xs mt-3">
+            Si tienes membresía activa, ya te sumamos este día al vencimiento.
+          </p>
+        </div>
+      ) : daySchedules.length === 0 ? (
         <div className="bg-white/5 border border-line rounded-2xl px-6 py-12 text-center">
           <p className="text-fg/30 text-sm">Sin clases programadas para este día.</p>
         </div>

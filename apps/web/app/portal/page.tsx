@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { site } from "@/app/content";
 import { getPortalMember } from "@ironfit/shared/portal/get-member";
+import { addDays, todayInEcuador } from "@ironfit/shared/date";
 import { computeAttendanceStats, type AttendanceStats } from "@ironfit/shared/portal/stats";
 import PreviewBanner from "./_components/PreviewBanner";
 import ProgressRing from "./_components/ProgressRing";
@@ -16,6 +17,13 @@ type MembershipRow = {
   effective_status: string;
   days_until_expiry: number;
   membership_plans: { name: string; duration_days: number; color: string; is_exclusive: boolean } | null;
+};
+
+type UpcomingClosure = {
+  date: string;
+  reason: string;
+  /** Ya se le sumó ese día a la membresía del socio. */
+  credited: boolean;
 };
 
 function fmtDate(s: string | null) {
@@ -56,8 +64,10 @@ export default async function PortalPage() {
     );
   }
 
-  // Fetch membership + attendance in parallel
-  const [membershipRes, checkInsRes] = await Promise.all([
+  const today = todayInEcuador();
+
+  // Fetch membership + attendance + próximos cierres del gym in parallel
+  const [membershipRes, checkInsRes, closuresRes, creditsRes] = await Promise.all([
     supabase
       .from("vw_memberships_status")
       .select(
@@ -74,7 +84,25 @@ export default async function PortalPage() {
       .eq("member_id", member.id)
       .order("checked_in_at", { ascending: false })
       .limit(400),
+    supabase
+      .from("gym_closures")
+      .select("id, closure_date, reason")
+      .gte("closure_date", today)
+      .lte("closure_date", addDays(today, 30))
+      .order("closure_date"),
+    supabase
+      .from("gym_closure_credits")
+      .select("closure_id")
+      .eq("member_id", member.id)
+      .eq("kind", "extended"),
   ]);
+
+  const creditedClosures = new Set((creditsRes.data ?? []).map((c) => c.closure_id as string));
+  const closures: UpcomingClosure[] = (closuresRes.data ?? []).map((c) => ({
+    date: c.closure_date as string,
+    reason: c.reason as string,
+    credited: creditedClosures.has(c.id as string),
+  }));
 
   const membership = membershipRes.data as MembershipRow | null;
   const stats = computeAttendanceStats(checkInsRes.data ?? []);
@@ -95,6 +123,11 @@ export default async function PortalPage() {
         </div>
         <StreakFlame streak={stats.currentStreak} />
       </div>
+
+      {/* ── Días que el gym no abre ──────────────────────────────────────── */}
+      {closures.length > 0 && (
+        <ClosureNotice closures={closures} today={today} endDate={membership?.end_date ?? null} />
+      )}
 
       {/* ── Weekly goal + membership ─────────────────────────────────────── */}
       <div className="grid lg:grid-cols-5 gap-4">
@@ -154,6 +187,52 @@ function greeting() {
   if (hour < 12) return "Buenos días";
   if (hour < 19) return "Buenas tardes";
   return "Buenas noches";
+}
+
+function ClosureNotice({
+  closures,
+  today,
+  endDate,
+}: {
+  closures: UpcomingClosure[];
+  today: string;
+  endDate: string | null;
+}) {
+  const credited = closures.filter((c) => c.credited).length;
+  return (
+    <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-400/30 rounded-2xl px-5 py-4">
+      <span className="text-xl leading-none">🗓️</span>
+      <div className="min-w-0">
+        <p className="text-blue-200 font-semibold text-sm">
+          {closures.length === 1 ? "El gimnasio no abrirá" : "Días que el gimnasio no abrirá"}
+        </p>
+        <ul className="mt-1 space-y-0.5">
+          {closures.map((c) => (
+            <li key={c.date} className="text-fg/70 text-sm">
+              <span className="font-medium text-fg">{fmtWeekdayLong(c.date)}</span>
+              {c.date === today && " (hoy)"} · {c.reason}
+            </li>
+          ))}
+        </ul>
+        {credited > 0 && endDate && (
+          <p className="text-fg/50 text-xs mt-2">
+            No pierdes nada: ya sumamos {credited === 1 ? "ese día" : `esos ${credited} días`} a tu
+            membresía. Ahora vence el {fmtDate(endDate)}.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function fmtWeekdayLong(date: string) {
+  const s = new Date(date + "T12:00:00Z").toLocaleDateString("es-EC", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function StreakFlame({ streak }: { streak: number }) {

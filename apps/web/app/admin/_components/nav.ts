@@ -29,7 +29,7 @@ export const ADMIN_NAV: AdminLink[] = [
     short: "Pagos",
     glyph: "◈",
     icon: "card",
-    match: ["/admin/membresias", "/admin/renovaciones", "/admin/ventas", "/admin/contabilidad"],
+    match: ["/admin/membresias", "/admin/renovaciones", "/admin/ventas", "/admin/contabilidad", "/admin/feriados"],
   },
   { href: "/admin/recordatorios", label: "Recordatorios", short: "Avisos", glyph: "◐", icon: "bell" },
   { href: "/admin/productos", label: "Productos", short: "Productos", glyph: "▦", icon: "box" },

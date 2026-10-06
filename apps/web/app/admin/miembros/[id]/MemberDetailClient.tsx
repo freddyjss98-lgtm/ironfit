@@ -22,7 +22,7 @@ import {
   revokeMemberAccess,
   type AccessCredentials,
 } from "../accessActions";
-import MemberMembershipsPanel from "./MemberMembershipsPanel";
+import MemberMembershipsPanel, { type ClosureDay } from "./MemberMembershipsPanel";
 import type { Membership, Plan } from "../../membresias/MembershipModals";
 
 type Member = {
@@ -85,6 +85,8 @@ type Props = {
   member: Member;
   memberships: Membership[];
   plans: Plan[];
+  /** Por membership_id: días sumados o corridos por cierres del gimnasio. */
+  closureDays?: Record<string, ClosureDay[]>;
   attendances: Attendance[];
   progress: Progress[];
   sales: Sale[];
@@ -312,6 +314,7 @@ export default function MemberDetailClient({
   member,
   memberships,
   plans,
+  closureDays = {},
   attendances,
   progress,
   sales,
@@ -507,6 +510,7 @@ export default function MemberDetailClient({
           member={{ id: member.id, full_name: member.full_name, phone: member.phone }}
           memberships={memberships}
           plans={plans}
+          closureDays={closureDays}
         />
       )}
 

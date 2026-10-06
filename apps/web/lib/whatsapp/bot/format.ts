@@ -235,6 +235,15 @@ export function noClassesToBookText(dayLabel: string): string {
   return `📅 Hoy (${dia}) no hay clases disponibles para reservar 😌`;
 }
 
+/** Hoy es un día de cierre registrado en /admin/feriados. */
+export function gymClosedTodayText(dayLabel: string, reason: string): string {
+  const dia = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+  return (
+    `🗓️ Hoy (${dia}) el gimnasio no abre: ${reason}.\n\n` +
+    `Si tienes membresía activa, ya te sumamos este día al vencimiento 💪`
+  );
+}
+
 export function bookingPromptText(
   options: BookingOption[],
   dayLabel: string

@@ -4,6 +4,8 @@
 // Ejecutado a diario por Vercel Cron (ver vercel.json). Itera sobre todos los
 // procesadores (lib/reminders/processors.ts): vencimiento próximo, membresía
 // vencida, bienvenida, reenganche, cumpleaños y recordatorio de clase.
+// Antes de los avisos hace la revisión final de los cierres por feriado cuyo
+// día ya llegó (ver /admin/feriados).
 // Se puede disparar manualmente:
 //
 //   curl -H "Authorization: Bearer $CRON_SECRET" \
@@ -50,6 +52,15 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createAdminClient();
+
+  // Va primero: el aviso de vencimiento debe usar la fecha ya corrida por el
+  // feriado. Si falla no frena los recordatorios; se reintenta mañana o al
+  // abrir /admin/feriados.
+  let closuresFinalized: number | null = null;
+  const { data: finalized, error: closuresError } = await supabase.rpc("finalize_due_gym_closures");
+  if (closuresError) console.error("[reminders] finalize_due_gym_closures", closuresError);
+  else closuresFinalized = Number(finalized) || 0;
+
   const mode = getWhatsappMode();
   const summary: Record<string, TypeSummary> = {};
   let totalSent = 0;
@@ -176,6 +187,7 @@ export async function GET(req: NextRequest) {
     totalSent,
     totalFailed,
     totalAdminCopies,
+    closuresFinalized,
     summary,
   });
 }

@@ -16,6 +16,7 @@ const titles: Record<string, string> = {
   "/admin/renovaciones": "Membresías y pagos",
   "/admin/ventas": "Membresías y pagos",
   "/admin/contabilidad": "Membresías y pagos",
+  "/admin/feriados": "Membresías y pagos",
   "/admin/clases": "Entrenamiento",
   "/admin/reservas": "Entrenamiento",
   "/admin/planificaciones": "Entrenamiento",
@@ -38,12 +39,13 @@ const SECTION_TABS: { match: string[]; tabs: { href: string; label: string }[] }
     ],
   },
   {
-    match: ["/admin/membresias", "/admin/renovaciones", "/admin/ventas", "/admin/contabilidad"],
+    match: ["/admin/membresias", "/admin/renovaciones", "/admin/ventas", "/admin/contabilidad", "/admin/feriados"],
     tabs: [
       { href: "/admin/membresias", label: "Membresías" },
       { href: "/admin/renovaciones", label: "Renovaciones" },
       { href: "/admin/ventas", label: "Ventas" },
       { href: "/admin/contabilidad", label: "Contabilidad" },
+      { href: "/admin/feriados", label: "Feriados" },
     ],
   },
 ];

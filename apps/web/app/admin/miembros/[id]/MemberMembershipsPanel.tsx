@@ -23,6 +23,22 @@ import {
 
 type MemberBasic = { id: string; full_name: string; phone: string };
 
+/** Un día de cierre del gimnasio aplicado a una membresía (ver /admin/feriados). */
+export type ClosureDay = {
+  date: string;
+  reason: string;
+  /** extended: +1 día al vencimiento. shifted: membresía encadenada corrida 1 día. */
+  kind: "extended" | "shifted";
+};
+
+function fmtDayMonth(date: string) {
+  return new Date(date + "T12:00:00Z").toLocaleDateString("es-EC", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 const STATUS_STYLE: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-400",
   expired: "bg-red-500/15 text-red-400",
@@ -41,11 +57,13 @@ const btnBase =
 
 function MembershipCard({
   m,
+  closureDays,
   onEdit,
   onRenew,
   onCancel,
 }: {
   m: Membership;
+  closureDays: ClosureDay[];
   onEdit: () => void;
   onRenew: () => void;
   onCancel: () => void;
@@ -74,6 +92,20 @@ function MembershipCard({
           </p>
           {st === "cancelled" && m.cancellation_reason && (
             <p className="text-fg/30 text-xs mt-0.5">Motivo: {m.cancellation_reason}</p>
+          )}
+          {closureDays.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {closureDays.map((d) => (
+                <span
+                  key={d.date}
+                  title={d.reason}
+                  className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-400/20"
+                >
+                  {d.kind === "extended" ? "+1 día" : "Corrida 1 día"} · cierre del{" "}
+                  {fmtDayMonth(d.date)}
+                </span>
+              ))}
+            </div>
           )}
         </div>
         <div className="text-right shrink-0">
@@ -154,10 +186,12 @@ export default function MemberMembershipsPanel({
   member,
   memberships,
   plans,
+  closureDays = {},
 }: {
   member: MemberBasic;
   memberships: Membership[];
   plans: Plan[];
+  closureDays?: Record<string, ClosureDay[]>;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Membership | null>(null);
@@ -184,6 +218,7 @@ export default function MemberMembershipsPanel({
           <MembershipCard
             key={m.id}
             m={m}
+            closureDays={closureDays[m.id] ?? []}
             onEdit={() => setEditing(m)}
             onRenew={() => setRenewing(m)}
             onCancel={() => setCancelling(m)}

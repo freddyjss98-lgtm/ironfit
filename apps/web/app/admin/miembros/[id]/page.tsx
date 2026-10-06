@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import MemberDetailClient from "./MemberDetailClient";
+import type { ClosureDay } from "./MemberMembershipsPanel";
 import EntrenamientoClient, { type WorkoutSession, type Routine } from "@/app/portal/progreso/EntrenamientoClient";
 
 export default async function MemberDetailPage({
@@ -40,6 +41,7 @@ export default async function MemberDetailPage({
     { data: workoutSessions },
     { data: routinesData },
     { data: plans },
+    { data: closureCredits },
   ] = await Promise.all([
     supabase
       .from("vw_memberships_status")
@@ -101,7 +103,25 @@ export default async function MemberDetailPage({
       .from("membership_plans")
       .select("id, name, price, duration_days, color")
       .order("price", { ascending: true }),
+
+    // Días que se le sumaron (o corrieron) por cierres del gimnasio.
+    supabase
+      .from("gym_closure_credits")
+      .select("membership_id, kind, gym_closures(closure_date, reason)")
+      .eq("member_id", id),
   ]);
+
+  const closureDays: Record<string, ClosureDay[]> = {};
+  for (const c of closureCredits ?? []) {
+    const closure = c.gym_closures as unknown as { closure_date: string; reason: string } | null;
+    if (!closure) continue;
+    (closureDays[c.membership_id as string] ??= []).push({
+      date: closure.closure_date,
+      reason: closure.reason,
+      kind: c.kind as ClosureDay["kind"],
+    });
+  }
+  for (const list of Object.values(closureDays)) list.sort((a, b) => a.date.localeCompare(b.date));
 
   const routineRows: Routine[] = (routinesData ?? []).map((r) => ({
     id: r.id as string,
@@ -174,6 +194,7 @@ export default async function MemberDetailPage({
             cancellation_reason: m.cancellation_reason ?? null,
           };
         })}
+        closureDays={closureDays}
         attendances={attendances ?? []}
         progress={progress ?? []}
         sales={sales ?? []}
