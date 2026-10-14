@@ -1,18 +1,89 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { Anton_400Regular } from '@expo-google-fonts/anton';
+import { BarlowCondensed_600SemiBold, BarlowCondensed_700Bold } from '@expo-google-fonts/barlow-condensed';
+import {
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+} from '@expo-google-fonts/space-grotesk';
+import { SpaceMono_400Regular } from '@expo-google-fonts/space-mono';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useFonts } from 'expo-font';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
+import { AppState } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { AuthProvider, useAuth } from '@/lib/auth';
+import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+});
+
+// Al volver a la app, React Query refresca lo que esté viejo (equivale al
+// "focus" de la ventana en la web).
+AppState.addEventListener('change', (state) => focusManager.setFocused(state === 'active'));
+
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Anton_400Regular,
+    BarlowCondensed_600SemiBold,
+    BarlowCondensed_700Bold,
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceMono_400Regular,
+  });
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <StatusBar style="light" />
+        <RootNavigator fontsReady={fontsLoaded || !!fontError} />
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
+
+function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
+  const { status } = useAuth();
+  const loading = !fontsReady || status === 'loading';
+
+  useEffect(() => {
+    if (!loading) SplashScreen.hideAsync();
+  }, [loading]);
+
+  // Mientras se restaura la sesión sigue el splash nativo.
+  if (loading) return null;
+
+  // Cada estado de la cuenta habilita solo sus pantallas; si el estado cambia
+  // (login, logout, contraseña cambiada) el router redirige solo.
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: 'fade',
+        contentStyle: { backgroundColor: colors.bg },
+      }}>
+      <Stack.Protected guard={status === 'member'}>
+        <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'signedOut'}>
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'mustChangePassword'}>
+        <Stack.Screen name="cambiar-clave" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'noMember'}>
+        <Stack.Screen name="sin-ficha" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'offline'}>
+        <Stack.Screen name="sin-conexion" />
+      </Stack.Protected>
+    </Stack>
   );
 }
