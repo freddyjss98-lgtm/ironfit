@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
@@ -15,6 +16,7 @@ import { colors, fonts, radius, space } from '@/theme';
 export default function ClassesScreen() {
   const { member } = useAuth();
   const memberId = member!.id;
+  const router = useRouter();
   const classes = useClasses(memberId);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -63,6 +65,9 @@ export default function ClassesScreen() {
         <View style={styles.warn}>
           <Text style={styles.warnTitle}>⚠️ Tu membresía no está activa</Text>
           <Text style={styles.warnText}>Necesitas una membresía vigente para reservar clases.</Text>
+          <View style={styles.warnAction}>
+            <Button label="Renovar membresía" onPress={() => router.push('/renovar')} />
+          </View>
         </View>
       )}
 
@@ -148,6 +153,7 @@ const styles = StyleSheet.create({
   },
   warnTitle: { fontFamily: fonts.bodySemi, fontSize: 14, color: '#fcd34d' },
   warnText: { fontFamily: fonts.body, fontSize: 13, color: colors.fgDim, marginTop: 2 },
+  warnAction: { marginTop: space.md },
   dayHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dayHeaderText: { fontFamily: fonts.condSemi, fontSize: 13, letterSpacing: 2, textTransform: 'uppercase', color: colors.fgDim },
   todayPill: {

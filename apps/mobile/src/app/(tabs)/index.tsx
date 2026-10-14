@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Notice } from '@/components/notice';
@@ -17,7 +17,6 @@ import {
 } from '@/features/home/sections';
 import { useHome } from '@/features/home/use-home';
 import { useAuth } from '@/lib/auth';
-import { GYM_WHATSAPP } from '@/lib/config';
 import { greeting, isBirthdayToday } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -27,8 +26,9 @@ export default function HomeScreen() {
   const home = useHome(member!.id);
   const firstName = member!.full_name.trim().split(/\s+/)[0];
 
-  const activate = () =>
-    Linking.openURL(`https://wa.me/${GYM_WHATSAPP}?text=${encodeURIComponent('Hola, quiero activar mi membresía')}`);
+  const activate = () => router.push('/renovar');
+  const m = home.data?.membership;
+  const needsRenewal = !m || m.effective_status !== 'active' || m.days_until_expiry <= 14;
 
   return (
     <Screen onRefresh={() => home.refetch()} refreshing={home.isRefetching}>
@@ -64,8 +64,11 @@ export default function HomeScreen() {
 
           <Text style={styles.sectionTitle}>Accesos rápidos</Text>
           <View style={styles.quickGrid}>
+            {needsRenewal && <QuickAction icon="refresh" label="Renovar" onPress={activate} highlight />}
             <QuickAction icon="barbell-outline" label="Entrenamiento" onPress={() => router.navigate('/clases')} />
             <QuickAction icon="stats-chart-outline" label="Progreso" onPress={() => router.navigate('/progreso')} />
+            <QuickAction icon="receipt-outline" label="Pagos y renovación" onPress={activate} />
+            <QuickAction icon="bag-handle-outline" label="Tienda" onPress={() => router.push('/tienda')} />
           </View>
 
           {member!.birthday && isBirthdayToday(member!.birthday, home.data.today) && (
