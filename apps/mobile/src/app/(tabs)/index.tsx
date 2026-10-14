@@ -15,6 +15,7 @@ import {
   StreakBadge,
   WeeklyGoalCard,
 } from '@/features/home/sections';
+import { CheckInCard } from '@/features/home/check-in';
 import { useHome } from '@/features/home/use-home';
 import { useAuth } from '@/lib/auth';
 import { greeting, isBirthdayToday } from '@/lib/dates';
@@ -49,6 +50,12 @@ export default function HomeScreen() {
         </View>
       ) : (
         <>
+          {m?.effective_status === 'active' && (
+            <CheckInCard
+              memberId={member!.id}
+              checkedInToday={home.data.stats.lastVisit === home.data.today}
+            />
+          )}
           {home.data.closures.length > 0 && (
             <ClosureNotice
               closures={home.data.closures}

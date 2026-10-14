@@ -9,6 +9,9 @@ import { Screen } from '@/components/screen';
 import { Body, Title } from '@/components/text';
 import { ClassCard, DAY_FULL, DAY_SHORT, DateStrip, DayWod, dayNum, fmt12h } from '@/features/classes/parts';
 import { dowOf, useClasses, type MyBooking } from '@/features/classes/use-classes';
+import { Locked } from '@/features/training/locked';
+import { Board, MyResultCard } from '@/features/wod/parts';
+import { addDays } from '@ironfit/shared/date';
 import { useAuth } from '@/lib/auth';
 import { ecuadorHour } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/theme';
@@ -88,7 +91,20 @@ export default function ClassesScreen() {
         {date === data.today && <Text style={styles.todayPill}>Hoy</Text>}
       </View>
 
-      {!closedReason && <DayWod html={data.wodByDate[date]} />}
+      {!closedReason &&
+        (data.hasActiveMembership ? (
+          <>
+            <DayWod html={data.wodByDate[date]} />
+            {date <= data.today && date >= addDays(data.today, -7) && (
+              <>
+                <MyResultCard memberId={memberId} date={date} />
+                <Board date={date} />
+              </>
+            )}
+          </>
+        ) : (
+          <Locked what="La planificación diaria, tu registro y la pizarra" />
+        ))}
 
       {closedReason ? (
         <View style={styles.closed}>
