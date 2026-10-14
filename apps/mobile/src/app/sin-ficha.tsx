@@ -20,7 +20,7 @@ export default function NoMemberScreen() {
         Tu cuenta no tiene ficha de atleta. El panel del gimnasio está en la web, en ironfitclub.org.
       </Body>
       <Button label="Abrir el panel web" onPress={() => Linking.openURL(`${WEB_URL}/admin`)} />
-      <Button label="Cerrar sesión" variant="ghost" onPress={signOut} />
+      <Button label="Cerrar sesión" variant="ghost" onPress={() => signOut()} />
     </Screen>
   );
 }

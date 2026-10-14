@@ -33,7 +33,20 @@
           "imageWidth": 76
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Iron Fit usa tus fotos para tu foto de perfil y los comprobantes de pago.",
+          "cameraPermission": "Iron Fit usa la cámara para tu foto de perfil y los comprobantes de pago."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#e84b1f"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

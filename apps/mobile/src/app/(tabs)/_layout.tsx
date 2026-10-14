@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import type { ComponentProps } from 'react';
+import { useEffect, type ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
 
+import { registerForPush } from '@/lib/push';
 import { colors, fonts } from '@/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -13,6 +14,12 @@ function TabIcon({ name, color, size }: { name: IconName; color: ColorValue; siz
 
 // Mismo orden que la barra inferior del portal web (PortalShell).
 export default function TabsLayout() {
+  // Si el socio ya aceptó las notificaciones, se re-registra el token en
+  // silencio (puede haber cambiado). El permiso se pide desde Perfil.
+  useEffect(() => {
+    registerForPush(false);
+  }, []);
+
   return (
     <Tabs
       screenOptions={{

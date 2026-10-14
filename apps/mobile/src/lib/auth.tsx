@@ -6,6 +6,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { unregisterPush } from './push';
 import { supabase } from './supabase';
 
 export type Member = { id: string; full_name: string; birthday: string | null };
@@ -24,7 +25,7 @@ type AuthContextValue = {
   session: Session | null;
   member: Member | null;
   retry: () => void;
-  signOut: () => Promise<void>;
+  signOut: (opts?: { accountDeleted?: boolean }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -73,10 +74,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ? 'member'
               : 'noMember';
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    queryClient.clear();
-  }, [queryClient]);
+  const signOut = useCallback(
+    async (opts?: { accountDeleted?: boolean }) => {
+      if (opts?.accountDeleted) {
+        // El usuario ya no existe en el servidor: solo se limpia el teléfono.
+        await supabase.auth.signOut({ scope: 'local' });
+      } else {
+        await unregisterPush(); // antes del signOut: la API necesita la sesión
+        await supabase.auth.signOut();
+      }
+      queryClient.clear();
+    },
+    [queryClient]
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({

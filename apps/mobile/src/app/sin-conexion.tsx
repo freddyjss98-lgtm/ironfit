@@ -15,7 +15,7 @@ export default function OfflineScreen() {
         No pudimos cargar tu cuenta. Revisa tu internet e inténtalo de nuevo.
       </Body>
       <Button label="Reintentar" onPress={retry} />
-      <Button label="Cerrar sesión" variant="ghost" onPress={signOut} />
+      <Button label="Cerrar sesión" variant="ghost" onPress={() => signOut()} />
     </Screen>
   );
 }

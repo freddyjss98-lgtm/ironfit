@@ -71,7 +71,7 @@ export default function ChangePasswordScreen() {
       />
 
       <Button label="Guardar y entrar" onPress={submit} loading={loading} />
-      <Button label="Cerrar sesión" variant="ghost" onPress={signOut} />
+      <Button label="Cerrar sesión" variant="ghost" onPress={() => signOut()} />
     </Screen>
   );
 }

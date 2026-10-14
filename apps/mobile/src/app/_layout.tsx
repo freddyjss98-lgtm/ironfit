@@ -15,7 +15,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { colors } from '@/theme';
+import { colors, fonts } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -48,6 +48,17 @@ export default function RootLayout() {
   );
 }
 
+// Pantallas secundarias (se abren encima de las pestañas): con barra y "atrás".
+const pushed = {
+  headerShown: true,
+  animation: 'default',
+  headerStyle: { backgroundColor: colors.bg },
+  headerTintColor: colors.fg,
+  headerTitleStyle: { fontFamily: fonts.cond, fontSize: 18 },
+  headerShadowVisible: false,
+  headerBackButtonDisplayMode: 'minimal',
+} as const;
+
 function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
   const { status } = useAuth();
   const loading = !fontsReady || status === 'loading';
@@ -70,6 +81,9 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
       }}>
       <Stack.Protected guard={status === 'member'}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="perfil/editar" options={{ ...pushed, title: 'Editar perfil' }} />
+        <Stack.Screen name="perfil/clave" options={{ ...pushed, title: 'Cambiar contraseña' }} />
+        <Stack.Screen name="perfil/eliminar" options={{ ...pushed, title: 'Eliminar cuenta' }} />
       </Stack.Protected>
       <Stack.Protected guard={status === 'signedOut'}>
         <Stack.Screen name="login" />
