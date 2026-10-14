@@ -104,8 +104,8 @@ export function DayWod({ html }: { html: string | undefined }) {
       <Text style={styles.wodTitle}>🗓️ Planificación del día</Text>
       <Text style={styles.wodText}>
         {segments.map((s, i) =>
-          s.bold ? (
-            <Text key={i} style={styles.wodBold}>
+          s.bold || s.color ? (
+            <Text key={i} style={[s.bold && styles.wodBold, s.color ? { color: s.color } : null]}>
               {s.text}
             </Text>
           ) : (
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   },
   wodTitle: { fontFamily: fonts.cond, fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: colors.accent, marginBottom: space.sm },
   wodText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21, color: colors.fg },
-  wodBold: { fontFamily: fonts.bodySemi, color: colors.accent },
+  wodBold: { fontFamily: fonts.bodySemi },
 
   classCard: { padding: 0, overflow: 'hidden' },
   classHeader: { paddingHorizontal: space.lg, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: 'rgba(36,36,36,0.6)' },
