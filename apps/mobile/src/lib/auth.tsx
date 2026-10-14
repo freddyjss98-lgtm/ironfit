@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { supabase } from './supabase';
 
-export type Member = { id: string; full_name: string };
+export type Member = { id: string; full_name: string; birthday: string | null };
 
 export type AuthStatus =
   | 'loading'
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: async (): Promise<Member | null> => {
       const { data, error } = await supabase
         .from('members')
-        .select('id, full_name')
+        .select('id, full_name, birthday')
         .eq('user_id', userId!)
         .is('deleted_at', null)
         .maybeSingle();

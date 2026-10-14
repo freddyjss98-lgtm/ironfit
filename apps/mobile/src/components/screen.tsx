@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, space } from '@/theme';
@@ -8,15 +8,23 @@ type Props = {
   children: ReactNode;
   /** Formularios: centra el contenido y evita que el teclado lo tape. */
   centered?: boolean;
+  /** Deslizar hacia abajo para recargar. */
+  onRefresh?: () => void;
+  refreshing?: boolean;
 };
 
-export function Screen({ children, centered = false }: Props) {
+export function Screen({ children, centered = false, onRefresh, refreshing = false }: Props) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[styles.content, centered && styles.centered]}
-          keyboardShouldPersistTaps="handled">
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} colors={[colors.accent]} />
+            ) : undefined
+          }>
           <View style={styles.inner}>{children}</View>
         </ScrollView>
       </KeyboardAvoidingView>

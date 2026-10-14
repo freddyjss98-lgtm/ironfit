@@ -6,7 +6,11 @@
 // streak (grace day).
 // =============================================================================
 
+import { todayInEcuador } from "../date";
+
 const GYM_CLOSED_DOW = 0; // Sunday
+// Ecuador: UTC-5 todo el año (ver date.ts).
+const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000;
 
 /** Convert "YYYY-MM-DD" to a stable integer day index (UTC-based, TZ-safe). */
 function dayIndex(dateStr: string): number {
@@ -24,11 +28,6 @@ function weekKey(idx: number): number {
   const dow = dowOf(idx);
   const offsetToMonday = (dow + 6) % 7; // Mon→0, Tue→1 … Sun→6
   return idx - offsetToMonday;
-}
-
-/** Today's date in Guayaquil time, as "YYYY-MM-DD". */
-export function ecuadorToday(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Guayaquil" });
 }
 
 export type AchievementId =
@@ -76,7 +75,7 @@ export function computeAttendanceStats(
   checkIns: CheckIn[],
   weeklyGoal = 4
 ): AttendanceStats {
-  const todayStr = ecuadorToday();
+  const todayStr = todayInEcuador();
   const todayIdx = dayIndex(todayStr);
 
   // Unique sorted day indexes
@@ -157,10 +156,12 @@ export function computeAttendanceStats(
     last30.push({ date: dt, visited: visited.has(idx) });
   }
 
-  // ── Early bird: any check-in before 7am ─────────────────────────────────
+  // ── Early bird: any check-in before 7am (hora de Ecuador) ───────────────
+  // No getHours(): da la hora de donde corre el código, y la web calcula esto
+  // en el servidor (UTC), donde las 6:30 de Ecuador son las 11:30.
   const earlyBird = checkIns.some((c) => {
     if (!c.checked_in_at) return false;
-    const hour = new Date(c.checked_in_at).getHours();
+    const hour = new Date(new Date(c.checked_in_at).getTime() - ECUADOR_OFFSET_MS).getUTCHours();
     return hour < 7;
   });
 

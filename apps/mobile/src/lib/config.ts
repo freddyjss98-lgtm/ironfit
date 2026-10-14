@@ -13,5 +13,8 @@ export const SUPABASE_ANON_KEY =
 /** Backend Next (API /api/app/*). */
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://www.ironfitclub.org";
 
+/** WhatsApp del gimnasio (mismo número que site.whatsappNumber en la web). */
+export const GYM_WHATSAPP = '593959888060';
+
 /** Panel web, para quien no es socio. */
 export const WEB_URL = "https://www.ironfitclub.org";
