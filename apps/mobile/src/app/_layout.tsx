@@ -83,6 +83,10 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="renovar" options={{ ...pushed, title: 'Renovar membresía' }} />
         <Stack.Screen name="wod/registrar" options={{ ...pushed, title: 'Mi resultado' }} />
+        <Stack.Screen name="marca" options={{ ...pushed, title: 'Récord' }} />
+        <Stack.Screen name="cuerpo/registrar" options={{ ...pushed, title: 'Registrar medición' }} />
+        <Stack.Screen name="fuerza/sesion" options={{ ...pushed, title: 'Registrar sesión' }} />
+        <Stack.Screen name="fuerza/rutina" options={{ ...pushed, title: 'Nueva rutina' }} />
         <Stack.Screen name="tienda" options={{ ...pushed, title: 'Tienda' }} />
         <Stack.Screen name="perfil/editar" options={{ ...pushed, title: 'Editar perfil' }} />
         <Stack.Screen name="perfil/clave" options={{ ...pushed, title: 'Cambiar contraseña' }} />

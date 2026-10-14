@@ -19,7 +19,7 @@ export function Choice<T extends string>({
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.row} accessibilityRole="radiogroup">
+      <View style={[styles.row, options.length > 4 && styles.wrap]} accessibilityRole="radiogroup">
         {options.map((o) => {
           const selected = o.value === value;
           return (
@@ -28,7 +28,7 @@ export function Choice<T extends string>({
               onPress={() => onChange(o.value)}
               accessibilityRole="radio"
               accessibilityState={{ selected }}
-              style={[styles.option, selected && styles.selected]}>
+              style={[styles.option, options.length > 4 && styles.optionWrap, selected && styles.selected]}>
               <Text style={[styles.optionText, selected && styles.selectedText]}>{o.label}</Text>
             </Pressable>
           );
@@ -42,6 +42,8 @@ const styles = StyleSheet.create({
   field: { gap: space.xs + 2 },
   label: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.fgDim },
   row: { flexDirection: 'row', gap: space.sm },
+  wrap: { flexWrap: 'wrap' },
+  optionWrap: { flex: 0, flexBasis: '23%', flexGrow: 1 },
   option: {
     flex: 1,
     minHeight: 44,

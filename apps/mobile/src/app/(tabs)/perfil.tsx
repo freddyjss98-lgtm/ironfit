@@ -9,6 +9,7 @@ import { Notice } from '@/components/notice';
 import { Screen } from '@/components/screen';
 import { Eyebrow } from '@/components/text';
 import { useProfile, type ProfileMembership } from '@/features/profile/use-profile';
+import { BoardPrivacy } from '@/features/wod/board-privacy';
 import { useAuth } from '@/lib/auth';
 import { pushPermissionGranted, registerForPush } from '@/lib/push';
 import { colors, fonts, radius, space } from '@/theme';
@@ -109,6 +110,8 @@ export default function ProfileScreen() {
           </View>
         ))}
       </Card>
+
+      <BoardPrivacy memberId={member!.id} />
 
       <Button label="Editar perfil" onPress={() => router.push('/perfil/editar')} />
       <Button label="Cambiar contraseña" variant="secondary" onPress={() => router.push('/perfil/clave')} />
