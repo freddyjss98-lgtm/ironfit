@@ -9,7 +9,7 @@
     "dev": "npm run dev -w @ironfit/web",
     "build": "npm run build -w @ironfit/web",
     "lint": "npm run lint -w @ironfit/web",
-    "mobile": "npm run start -w @ironfit/mobile",
+    "mobile": "npm run start:go -w @ironfit/mobile",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "overrides": {
