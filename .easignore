@@ -1,0 +1,47 @@
+# EAS Build sube el repositorio entero (monorepo). Este archivo reemplaza a
+# los .gitignore para ese envío: por eso repite sus reglas y además excluye lo
+# que la app móvil no necesita.
+
+# ── Copia de .gitignore (raíz) ───────────────────────────────────────────────
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+coverage/
+.next/
+out/
+build/
+.DS_Store
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env*
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+supabase/.temp/
+
+# ── Copia de apps/mobile/.gitignore ──────────────────────────────────────────
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+apps/mobile/ios/
+apps/mobile/android/
+
+# ── Lo que la app no usa ─────────────────────────────────────────────────────
+# La web (fotos de la galería: ~95 MB). npm sí necesita su package.json para
+# resolver los workspaces del package-lock.
+apps/web/*
+!apps/web/package.json
+supabase/
