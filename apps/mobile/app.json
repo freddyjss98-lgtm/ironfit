@@ -46,6 +46,15 @@
         {
           "color": "#e84b1f"
         }
+      ],
+      "expo-sharing",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Iron Fit guarda en tus fotos la tarjeta de tu WOD para compartirla.",
+          "savePhotosPermission": "Iron Fit guarda en tus fotos la tarjeta de tu WOD para compartirla.",
+          "isAccessMediaLocationEnabled": false
+        }
       ]
     ],
     "experiments": {

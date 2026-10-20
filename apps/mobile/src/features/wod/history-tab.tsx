@@ -45,6 +45,13 @@ export function WodHistoryTab({ memberId }: { memberId: string }) {
               </Text>
             </View>
             <Text style={styles.score}>{fmtScore(r)}</Text>
+            <Pressable
+              onPress={() => router.push({ pathname: '/wod/compartir', params: { date: r.workout_date } })}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Compartir este WOD">
+              <Text style={styles.share}>↗</Text>
+            </Pressable>
           </Pressable>
         ))}
       </Card>
@@ -62,4 +69,5 @@ const styles = StyleSheet.create({
   date: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.fg },
   small: { fontFamily: fonts.body, fontSize: 12, color: colors.fgMute, marginTop: 2 },
   score: { fontFamily: fonts.display, fontSize: 18, color: colors.accent },
+  share: { fontSize: 20, color: colors.fgDim, paddingLeft: space.xs },
 });

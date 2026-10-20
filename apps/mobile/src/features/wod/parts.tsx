@@ -17,27 +17,31 @@ export function MyResultCard({ memberId, date }: { memberId: string; date: strin
 
   if (mine.isPending) return <ActivityIndicator color={colors.accent} />;
   const r = mine.data;
+  const share = () => router.push({ pathname: '/wod/compartir', params: { date } });
+  if (!r) {
+    return (
+      <Pressable onPress={open} accessibilityRole="button" style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}>
+        <Text style={styles.ctaTitle}>Mi WOD: anotar y compartir</Text>
+        <Text style={styles.ctaText}>Anota lo que quieras (o nada) y comparte tu tarjeta en Instagram</Text>
+      </Pressable>
+    );
+  }
   return (
-    <Pressable onPress={open} accessibilityRole="button" style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
-      {r ? (
-        <Card style={styles.mine}>
-          <View style={styles.flex}>
-            <SectionLabel>Mi resultado</SectionLabel>
-            <Text style={styles.mineScore}>{fmtScore(r)}</Text>
-            <Text style={styles.small}>
-              {r.rx ? 'Rx' : 'Escalado'}
-              {r.notes ? ` · ${r.notes}` : ''}
-            </Text>
-          </View>
-          <Text style={styles.edit}>Editar</Text>
-        </Card>
-      ) : (
-        <View style={styles.cta}>
-          <Text style={styles.ctaTitle}>Registrar mi resultado</Text>
-          <Text style={styles.ctaText}>Tiempo, rondas o kilos · aparece en la pizarra del box</Text>
-        </View>
-      )}
-    </Pressable>
+    <Card style={styles.mine}>
+      <Pressable onPress={open} style={styles.flex} accessibilityRole="button" accessibilityLabel="Editar mi resultado">
+        <SectionLabel>Mi resultado</SectionLabel>
+        <Text style={styles.mineScore}>{fmtScore(r)}</Text>
+        <Text style={styles.small}>
+          {r.rx ? 'Rx' : 'Escalado'}
+          {r.parts?.length > 1 ? ` · ${r.parts.length} partes` : ''}
+          {r.notes ? ` · ${r.notes}` : ''}
+        </Text>
+        <Text style={styles.edit}>Editar</Text>
+      </Pressable>
+      <Pressable onPress={share} style={styles.shareBtn} accessibilityRole="button">
+        <Text style={styles.shareText}>Compartir</Text>
+      </Pressable>
+    </Card>
   );
 }
 
@@ -105,7 +109,9 @@ const styles = StyleSheet.create({
   empty: { marginTop: space.sm },
   mine: { flexDirection: 'row', alignItems: 'center', gap: space.md, borderColor: 'rgba(232,75,31,0.35)' },
   mineScore: { fontFamily: fonts.display, fontSize: 28, color: colors.accent, marginTop: 2 },
-  edit: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.fgDim },
+  edit: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.fgDim, marginTop: space.xs },
+  shareBtn: { backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: space.lg, paddingVertical: space.md },
+  shareText: { fontFamily: fonts.bodySemi, fontSize: 14, color: '#fff' },
   cta: { backgroundColor: colors.accent, borderRadius: radius.lg, padding: space.lg },
   ctaTitle: { fontFamily: fonts.display, fontSize: 20, color: '#fff', textTransform: 'uppercase' },
   ctaText: { fontFamily: fonts.body, fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },

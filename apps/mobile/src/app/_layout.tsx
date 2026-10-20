@@ -82,7 +82,8 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
       <Stack.Protected guard={status === 'member'}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="renovar" options={{ ...pushed, title: 'Renovar membresía' }} />
-        <Stack.Screen name="wod/registrar" options={{ ...pushed, title: 'Mi resultado' }} />
+        <Stack.Screen name="wod/registrar" options={{ ...pushed, title: 'Mi WOD' }} />
+        <Stack.Screen name="wod/compartir" options={{ ...pushed, title: 'Compartir mi WOD' }} />
         <Stack.Screen name="marca" options={{ ...pushed, title: 'Récord' }} />
         <Stack.Screen name="cuerpo/registrar" options={{ ...pushed, title: 'Registrar medición' }} />
         <Stack.Screen name="fuerza/sesion" options={{ ...pushed, title: 'Registrar sesión' }} />

@@ -5,8 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
 import type { Score, ScoreType } from './score';
+import type { PartScore } from './wod-parts';
 
-export type MyResult = Score & { id: string; notes: string | null; workout_date: string };
+export type MyResult = Score & { id: string; notes: string | null; workout_date: string; parts: PartScore[] };
 export type BoardRow = Score & { display_name: string; is_me: boolean };
 
 const toScore = <T extends Record<string, unknown>>(r: T) => ({
@@ -20,7 +21,7 @@ export function useMyResult(memberId: string, date: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('wod_results')
-        .select('id, workout_date, score_type, time_seconds, capped, rounds, reps, load_kg, rx, notes')
+        .select('id, workout_date, score_type, time_seconds, capped, rounds, reps, load_kg, rx, notes, parts')
         .eq('member_id', memberId)
         .eq('workout_date', date)
         .maybeSingle();
@@ -51,6 +52,8 @@ export type ResultInput = {
   load_kg: number | null;
   rx: boolean;
   notes: string | null;
+  /** Resultados opcionales por parte (para la tarjeta). */
+  parts: PartScore[];
 };
 
 export function useSaveResult(memberId: string, date: string) {
@@ -93,7 +96,7 @@ export function useWodHistory(memberId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('wod_results')
-        .select('id, workout_date, score_type, time_seconds, capped, rounds, reps, load_kg, rx, notes')
+        .select('id, workout_date, score_type, time_seconds, capped, rounds, reps, load_kg, rx, notes, parts')
         .eq('member_id', memberId)
         .order('workout_date', { ascending: false })
         .limit(60);
