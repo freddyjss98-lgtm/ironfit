@@ -19,8 +19,21 @@ export type PartScore = {
 
 const SKIP = /calentamiento|warm.?up|movilidad|estiramiento|enfriamiento|cool.?down/i;
 
-/** Títulos de las partes puntuables del WOD, en orden. */
-export function detectParts(html: string | undefined): string[] {
+export type WodSection = {
+  /** Título del coach ("B. Fase 1"); vacío si el WOD no tiene títulos. */
+  title: string;
+  /** Lo que hay debajo: esquema y ejercicios ("4 rondas:", "600 m carrera"). */
+  lines: string[];
+  /** Calentamiento, movilidad…: se muestra pero no se puntúa. */
+  warmup: boolean;
+};
+
+/**
+ * El WOD dividido en secciones. Cada título del coach (en color o negrita)
+ * abre una; los títulos con estilo seguidos se juntan ("B. Fase 1 :" +
+ * "6 Rondas") y todo lo que viene debajo sin estilo son sus líneas.
+ */
+export function wodSections(html: string | undefined): WodSection[] {
   if (!html) return [];
   // Reparte los segmentos en líneas, recordando si la línea tiene estilo.
   const lines: { text: string; styled: boolean }[] = [{ text: '', styled: false }];
@@ -34,26 +47,44 @@ export function detectParts(html: string | undefined): string[] {
     });
   }
 
-  const parts: string[][] = [];
-  let current: string[] | null = null;
+  const sections: { title: string[]; lines: string[] }[] = [];
+  let inTitle = false;
   for (const l of lines) {
-    const text = l.text.trim().replace(/[\s:]+$/, '');
-    const heading = l.styled && text && !/^[-•*]/.test(text);
+    const raw = l.text.trim();
+    if (!raw) continue;
+    const heading = l.styled && !/^[-•*→]/.test(raw);
     if (heading) {
-      // "A. ...", "B) ..." o "Parte 2" abren una parte nueva; lo demás la completa.
-      if (!current || /^([A-Z][.)]|parte\s*\d)/i.test(text)) parts.push((current = []));
-      current.push(text);
-    } else if (text) {
-      current = null;
+      const text = raw.replace(/[\s:]+$/, '');
+      // "A. ...", "B) ..." o "Parte 2" abren sección; un título seguido de otro la completa.
+      if (!inTitle || /^([A-Z][.)]|parte\s*\d)/i.test(text)) sections.push({ title: [], lines: [] });
+      sections[sections.length - 1].title.push(text);
+      inTitle = true;
+    } else {
+      if (!sections.length) sections.push({ title: [], lines: [] }); // WOD sin títulos
+      sections[sections.length - 1].lines.push(raw);
+      inTitle = false;
     }
   }
-  return parts
-    .map((p) => p.join(' · ').replace(/\s+/g, ' '))
-    .filter((label) => !SKIP.test(label))
+  return sections.map((s) => {
+    const title = s.title.join(' · ').replace(/\s+/g, ' ');
+    return { title, lines: s.lines, warmup: SKIP.test(title) };
+  });
+}
+
+/** Títulos de las partes puntuables del WOD, en orden. */
+export function detectParts(html: string | undefined): string[] {
+  return wodSections(html)
+    .filter((s) => s.title && !s.warmup)
+    .map((s) => s.title)
     .slice(0, 6);
 }
 
-/** Formato más probable según el título que puso el coach. */
+/** Primera línea de una parte ("4 rondas:", "AMRAP 10'"): ayuda a adivinar el formato. */
+export function partScheme(html: string | undefined, title: string): string {
+  return wodSections(html).find((s) => s.title === title)?.lines[0]?.replace(/[\s:]+$/, '') ?? '';
+}
+
+/** Formato más probable según el título (y el esquema) que puso el coach. */
 export function guessType(label: string): ScoreType {
   if (/amrap/i.test(label)) return 'rounds';
   if (/\b\d*\s*rm\b|\b\d+\s*x\s*\d+\b|fuerza|carga|peso|\bkg\b|heavy|max(imo)?\b/i.test(label)) return 'load';

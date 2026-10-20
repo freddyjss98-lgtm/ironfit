@@ -10,7 +10,7 @@ import { Body } from '@/components/text';
 import { SCORE_LABELS, type ScoreType } from '@/features/wod/score';
 import { useDayWod } from '@/features/wod/use-day-wod';
 import { useDeleteResult, useMyResult, useSaveResult, type MyResult } from '@/features/wod/use-wod';
-import { detectParts, guessType, parseScore, scoreToInput, type PartScore } from '@/features/wod/wod-parts';
+import { detectParts, guessType, parseScore, partScheme, scoreToInput, type PartScore } from '@/features/wod/wod-parts';
 import { useAuth } from '@/lib/auth';
 import { fmtWeekdayLong } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/theme';
@@ -38,10 +38,13 @@ export default function MyWodScreen() {
       </Screen>
     );
   }
-  return <MyWodForm memberId={member!.id} date={date} current={result.data ?? null} labels={detectParts(wod.data ?? undefined)} />;
+  const html = wod.data ?? undefined;
+  const labels = detectParts(html);
+  const schemes = Object.fromEntries(labels.map((l) => [l, partScheme(html, l)]));
+  return <MyWodForm memberId={member!.id} date={date} current={result.data ?? null} labels={labels} schemes={schemes} />;
 }
 
-function initialRows(labels: string[], current: MyResult | null): Row[] {
+function initialRows(labels: string[], current: MyResult | null, schemes: Record<string, string>): Row[] {
   const saved = current?.parts ?? [];
   if (labels.length === 0) {
     // Sin títulos en la planificación: un único resultado.
@@ -50,7 +53,7 @@ function initialRows(labels: string[], current: MyResult | null): Row[] {
   }
   return labels.map((label, i) => {
     const p = saved.find((s) => s.label === label) ?? (saved.length === 0 && i === 0 && current ? { ...current, label } : null);
-    return { label, type: p?.score_type ?? guessType(label), input: p ? scoreToInput(p as PartScore) : '' };
+    return { label, type: p?.score_type ?? guessType(`${label} ${schemes[label] ?? ''}`), input: p ? scoreToInput(p as PartScore) : '' };
   });
 }
 
@@ -59,16 +62,18 @@ function MyWodForm({
   date,
   current,
   labels,
+  schemes,
 }: {
   memberId: string;
   date: string;
   current: MyResult | null;
   labels: string[];
+  schemes: Record<string, string>;
 }) {
   const router = useRouter();
   const save = useSaveResult(memberId, date);
   const remove = useDeleteResult(memberId, date);
-  const [rows, setRows] = useState<Row[]>(() => initialRows(labels, current));
+  const [rows, setRows] = useState<Row[]>(() => initialRows(labels, current, schemes));
   const [rx, setRx] = useState<'rx' | 'scaled'>(current && !current.rx ? 'scaled' : 'rx');
   const [notes, setNotes] = useState(current?.notes ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -136,9 +141,12 @@ function MyWodForm({
       {rows.map((r, i) => (
         <View key={r.label + i} style={styles.part}>
           <View style={styles.partHead}>
-            <Text style={styles.partLabel} numberOfLines={2}>
-              {r.label}
-            </Text>
+            <View style={styles.flex}>
+              <Text style={styles.partLabel} numberOfLines={2}>
+                {r.label}
+              </Text>
+              {schemes[r.label] ? <Text style={styles.scheme}>{schemes[r.label]}</Text> : null}
+            </View>
             <Pressable onPress={() => cycleType(i)} style={styles.type} accessibilityRole="button" accessibilityLabel={`Formato: ${SCORE_LABELS[r.type]}. Toca para cambiar`}>
               <Text style={styles.typeText}>{SCORE_LABELS[r.type]} ⇄</Text>
             </Pressable>
@@ -185,7 +193,9 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.fgMute, marginTop: -space.sm },
   part: { gap: space.xs + 2 },
   partHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  partLabel: { flex: 1, fontFamily: fonts.bodySemi, fontSize: 14, color: colors.accent },
+  flex: { flex: 1 },
+  partLabel: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.accent },
+  scheme: { fontFamily: fonts.body, fontSize: 12, color: colors.fgMute, marginTop: 1 },
   type: { borderWidth: 1, borderColor: colors.line2, borderRadius: 999, paddingHorizontal: space.md, paddingVertical: 4 },
   typeText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.fgDim },
   input: {

@@ -11,10 +11,10 @@ import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
 import { useHome } from '@/features/home/use-home';
-import { ShareCard, type CardData, type CardDesign } from '@/features/wod/share-card';
+import { ShareCard, type CardData, type CardDesign, type CardSection } from '@/features/wod/share-card';
 import { useDayRecords, useDayWod } from '@/features/wod/use-day-wod';
 import { useMyResult } from '@/features/wod/use-wod';
-import { detectParts } from '@/features/wod/wod-parts';
+import { wodSections } from '@/features/wod/wod-parts';
 import { useAuth } from '@/lib/auth';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -38,6 +38,7 @@ export default function ShareWodScreen() {
   const [design, setDesign] = useState<CardDesign>('full');
   const [showStreak, setShowStreak] = useState(true);
   const [showRecords, setShowRecords] = useState(true);
+  const [showWarmup, setShowWarmup] = useState(true);
   const [busy, setBusy] = useState<null | 'save' | 'copy' | 'share'>(null);
 
   if (result.isPending || wod.isPending || records.isPending) {
@@ -49,18 +50,27 @@ export default function ShareWodScreen() {
   }
 
   const saved = result.data?.parts ?? [];
-  const labels = detectParts(wod.data ?? undefined);
-  const parts = labels.length
-    ? labels.map((label) => ({ label, score: saved.find((s) => s.label === label) ?? null }))
-    : result.data // WOD sin títulos: el resultado único
-      ? [{ label: 'Mi resultado', score: { ...result.data, label: 'Mi resultado' } }]
-      : [];
+  const all = wodSections(wod.data ?? undefined);
+  const hasWarmup = all.some((s) => s.warmup);
+  const visible = all.filter((s) => showWarmup || !s.warmup);
+  let sections: CardSection[] = visible.map((s) => ({
+    title: s.title,
+    lines: s.lines,
+    score: saved.find((p) => p.label === s.title) ?? null,
+  }));
+  // Resultado sin parte asignada (WOD sin títulos o registro antiguo): va en la
+  // primera sección que no sea calentamiento.
+  if (result.data && !sections.some((s) => s.score)) {
+    const main = { ...result.data, label: '' };
+    const target = visible.findIndex((s) => !s.warmup);
+    sections = target >= 0 ? sections.map((s, i) => (i === target ? { ...s, score: main } : s)) : [{ title: 'Mi resultado', lines: [], score: main }];
+  }
   const dayRecords = records.data ?? [];
   const streak = home.data?.stats.currentStreak ?? null;
 
   const data: CardData = {
     dateLabel: dateLabel(date),
-    parts,
+    sections,
     records: showRecords ? dayRecords : [],
     streak: showStreak ? streak : null,
     rx: result.data ? result.data.rx : null,
@@ -118,6 +128,12 @@ export default function ShareWodScreen() {
       <Text style={styles.note}>La imagen se guarda sin fondo para ponerla encima de tu foto.</Text>
 
       <Card style={styles.options}>
+        {hasWarmup && design === 'full' && (
+          <View style={styles.option}>
+            <Text style={styles.optionText}>Incluir calentamiento</Text>
+            <Switch value={showWarmup} onValueChange={setShowWarmup} trackColor={{ true: colors.accent, false: colors.line2 }} thumbColor="#fff" />
+          </View>
+        )}
         {streak != null && streak > 0 && (
           <View style={styles.option}>
             <Text style={styles.optionText}>Mostrar racha</Text>
@@ -130,7 +146,7 @@ export default function ShareWodScreen() {
             <Switch value={showRecords} onValueChange={setShowRecords} trackColor={{ true: colors.accent, false: colors.line2 }} thumbColor="#fff" />
           </View>
         )}
-        {(streak == null || streak === 0) && dayRecords.length === 0 && (
+        {!saved.length && !result.data && (
           <Text style={styles.optionText}>Tip: anota tus resultados para que salgan al lado de cada parte.</Text>
         )}
       </Card>

@@ -1,6 +1,7 @@
-// Tarjeta "sin fondo" para Instagram (estilo Strava): sello Iron Fit, el WOD
-// del día y, al lado de cada parte, lo que anotó el socio. El fondo es
-// transparente: se captura como PNG y se pega encima de una foto.
+// Tarjeta "sin fondo" para Instagram (estilo Strava): sello Iron Fit y el WOD
+// del día completo — cada sección con sus ejercicios y, al lado del título,
+// lo que anotó el socio. El fondo es transparente: se captura como PNG y se
+// pega encima de una foto.
 
 import { Image } from 'expo-image';
 import { forwardRef } from 'react';
@@ -13,9 +14,11 @@ import type { PartScore } from './wod-parts';
 
 export type CardDesign = 'full' | 'min';
 
+export type CardSection = { title: string; lines: string[]; score: PartScore | null };
+
 export type CardData = {
   dateLabel: string; // "JUE 15 OCT"
-  parts: { label: string; score: PartScore | null }[];
+  sections: CardSection[];
   records: { name: string; kg: number }[];
   streak: number | null;
   rx: boolean | null;
@@ -37,18 +40,24 @@ export function fmtPart(p: PartScore): string {
   }
 }
 
+/** Tamaño del texto según cuánto WOD hay: siempre tiene que caber en una historia. */
+function sizes(totalLines: number) {
+  if (totalLines > 30) return { line: 10, lh: 13, title: 13, score: 20, seal: 110 };
+  if (totalLines > 20) return { line: 11.5, lh: 15, title: 14, score: 22, seal: 125 };
+  return { line: 13, lh: 17, title: 15, score: 26, seal: 150 };
+}
+
 export const ShareCard = forwardRef<View, { data: CardData; design: CardDesign }>(function ShareCard({ data, design }, ref) {
-  const scored = data.parts.filter((p) => p.score);
+  const scored = data.sections.filter((s) => s.score);
   const main = scored[0]?.score ?? null;
+  const total = data.sections.reduce((n, s) => n + s.lines.length + 1, 0) + data.records.length;
+  const z = sizes(total);
+  const sealW = design === 'min' ? 130 : z.seal;
 
   return (
     // collapsable={false}: en Android la vista debe existir de verdad para capturarla.
     <View ref={ref} collapsable={false} style={styles.card}>
-      <Image
-        source={require('@/assets/images/sello.png')}
-        style={{ width: design === 'min' ? 130 : 150, height: (design === 'min' ? 130 : 150) / SEAL_RATIO }}
-        contentFit="contain"
-      />
+      <Image source={require('@/assets/images/sello.png')} style={{ width: sealW, height: sealW / SEAL_RATIO }} contentFit="contain" />
       <Text style={styles.date}>WOD · {data.dateLabel}</Text>
 
       {design === 'min' ? (
@@ -57,7 +66,7 @@ export const ShareCard = forwardRef<View, { data: CardData; design: CardDesign }
             <>
               <Text style={styles.bigScore}>{fmtPart(main)}</Text>
               <Text style={styles.minLabel} numberOfLines={2}>
-                {scored[0].label}
+                {scored[0].title}
               </Text>
             </>
           ) : (
@@ -65,22 +74,31 @@ export const ShareCard = forwardRef<View, { data: CardData; design: CardDesign }
           )}
         </View>
       ) : (
-        <View style={styles.rows}>
-          {data.parts.map((p, i) => (
-            <View key={i} style={styles.row}>
-              <Text style={styles.label} numberOfLines={2}>
-                {p.label}
-              </Text>
-              {p.score && <Text style={styles.score}>{fmtPart(p.score)}</Text>}
+        <View style={styles.sections}>
+          {data.sections.map((s, i) => (
+            <View key={i} style={styles.section}>
+              {(s.title || s.score) && (
+                <View style={styles.titleRow}>
+                  <Text style={[styles.title, { fontSize: z.title }]} numberOfLines={2}>
+                    {s.title}
+                  </Text>
+                  {s.score && <Text style={[styles.score, { fontSize: z.score }]}>{fmtPart(s.score)}</Text>}
+                </View>
+              )}
+              {s.lines.map((l, j) => (
+                <Text key={j} style={[styles.line, { fontSize: z.line, lineHeight: z.lh }]}>
+                  {l}
+                </Text>
+              ))}
             </View>
           ))}
           {data.records.map((r) => (
-            <View key={r.name} style={styles.row}>
-              <Text style={styles.label}>{r.name} · récord</Text>
-              <Text style={styles.score}>{r.kg} kg ★</Text>
+            <View key={r.name} style={styles.titleRow}>
+              <Text style={[styles.title, { fontSize: z.title }]}>{r.name} · récord</Text>
+              <Text style={[styles.score, { fontSize: z.score }]}>{r.kg} kg ★</Text>
             </View>
           ))}
-          {data.parts.length === 0 && data.records.length === 0 && <Text style={styles.done}>WOD COMPLETADO ✓</Text>}
+          {data.sections.length === 0 && data.records.length === 0 && <Text style={styles.done}>WOD COMPLETADO ✓</Text>}
         </View>
       )}
 
@@ -92,15 +110,17 @@ export const ShareCard = forwardRef<View, { data: CardData; design: CardDesign }
   );
 });
 
-const shadow = { textShadowColor: 'rgba(0,0,0,0.65)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 };
+const shadow = { textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 };
 
 const styles = StyleSheet.create({
-  card: { width: 340, paddingVertical: 20, paddingHorizontal: 18, alignItems: 'center', backgroundColor: 'transparent', gap: 10 },
+  card: { width: 340, paddingVertical: 18, paddingHorizontal: 18, alignItems: 'center', backgroundColor: 'transparent', gap: 8 },
   date: { ...shadow, fontFamily: fonts.cond, fontSize: 15, letterSpacing: 3, color: '#fff' },
-  rows: { alignSelf: 'stretch', gap: 8, marginTop: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  label: { ...shadow, flex: 1, fontFamily: fonts.bodySemi, fontSize: 15, color: '#fff' },
-  score: { ...shadow, fontFamily: fonts.display, fontSize: 26, color: colors.accent },
+  sections: { alignSelf: 'stretch', gap: 10, marginTop: 4 },
+  section: { gap: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 2 },
+  title: { ...shadow, flex: 1, fontFamily: fonts.cond, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.accent },
+  score: { ...shadow, fontFamily: fonts.display, color: '#fff' },
+  line: { ...shadow, fontFamily: fonts.bodyMedium, color: '#fff' },
   minBody: { alignItems: 'center', marginTop: 4 },
   bigScore: { ...shadow, fontFamily: fonts.display, fontSize: 72, lineHeight: 80, color: colors.accent },
   minLabel: { ...shadow, fontFamily: fonts.bodySemi, fontSize: 14, color: '#fff', textAlign: 'center' },
