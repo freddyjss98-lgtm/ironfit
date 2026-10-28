@@ -64,8 +64,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "update:preview": "eas update --channel preview",
-    "update:production": "eas update --channel production"
+    "update:preview": "eas update --channel preview --environment preview --platform android && eas update --channel preview --environment preview --platform ios",
+    "update:production": "eas update --channel production --environment production --platform android && eas update --channel production --environment production --platform ios"
   },
   "private": true
 }
