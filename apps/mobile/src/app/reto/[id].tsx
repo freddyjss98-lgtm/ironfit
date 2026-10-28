@@ -1,3 +1,4 @@
+import { addDays } from '@ironfit/shared/date';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -109,7 +110,13 @@ export default function CompleteChallengeScreen() {
         maxLength={300}
       />
 
-      <ShareFields share={share} onShare={setShare} photo={photo} onPhoto={setPhoto} />
+      <ShareFields
+        share={share}
+        onShare={setShare}
+        photo={photo}
+        onPhoto={setPhoto}
+        photoNote={`Las fotos del reto se ven hasta el ${fmtShort(addDays(c.ends_on, 1))}; después se borran.`}
+      />
 
       <Button label="¡Reto cumplido!" onPress={submit} loading={complete.isPending} />
       <Text style={styles.hint}>

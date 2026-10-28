@@ -14,9 +14,11 @@ type Props = {
   onShare: (v: boolean) => void;
   photo: PickedPhoto | null;
   onPhoto: (p: PickedPhoto | null) => void;
+  /** Aclaración bajo la foto (p. ej. que las de los retos son temporales). */
+  photoNote?: string;
 };
 
-export function ShareFields({ share, onShare, photo, onPhoto }: Props) {
+export function ShareFields({ share, onShare, photo, onPhoto, photoNote }: Props) {
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
@@ -51,6 +53,7 @@ export function ShareFields({ share, onShare, photo, onPhoto }: Props) {
             <Text style={styles.addText}>📷 Agregar foto (opcional)</Text>
           </Pressable>
         ))}
+      {share && photoNote ? <Text style={styles.text}>{photoNote}</Text> : null}
     </Card>
   );
 }

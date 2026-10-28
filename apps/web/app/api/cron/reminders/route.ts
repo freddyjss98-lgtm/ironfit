@@ -5,7 +5,8 @@
 // procesadores (lib/reminders/processors.ts): vencimiento próximo, membresía
 // vencida, bienvenida, reenganche, cumpleaños y recordatorio de clase.
 // Antes de los avisos hace la revisión final de los cierres por feriado cuyo
-// día ya llegó (ver /admin/feriados).
+// día ya llegó (ver /admin/feriados) y borra las fotos de los retos que ya
+// cerraron (ver lib/services/challenges.ts).
 // Se puede disparar manualmente:
 //
 //   curl -H "Authorization: Bearer $CRON_SECRET" \
@@ -28,6 +29,7 @@ import {
 } from "@/lib/reminders/processors";
 import { REMINDER_TYPE_EXPIRY } from "@/lib/reminders/expiry";
 import { pushToMember } from "@/lib/push/expo";
+import { purgeClosedChallengePhotos } from "@/lib/services/challenges";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +62,14 @@ export async function GET(req: NextRequest) {
   const { data: finalized, error: closuresError } = await supabase.rpc("finalize_due_gym_closures");
   if (closuresError) console.error("[reminders] finalize_due_gym_closures", closuresError);
   else closuresFinalized = Number(finalized) || 0;
+
+  // Fotos de los retos ya cerrados (best-effort, igual que los cierres).
+  let challengePhotosPurged: number | null = null;
+  try {
+    challengePhotosPurged = await purgeClosedChallengePhotos(supabase);
+  } catch (err) {
+    console.error("[reminders] purgeClosedChallengePhotos", err);
+  }
 
   const mode = getWhatsappMode();
   const summary: Record<string, TypeSummary> = {};
@@ -188,6 +198,7 @@ export async function GET(req: NextRequest) {
     totalFailed,
     totalAdminCopies,
     closuresFinalized,
+    challengePhotosPurged,
     summary,
   });
 }

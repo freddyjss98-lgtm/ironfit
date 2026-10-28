@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { addDays, todayInEcuador } from "@ironfit/shared/date";
+import { purgeClosedChallengePhotos } from "@/lib/services/challenges";
 import RetosClient, { type ChallengeRow, type PostRow } from "./RetosClient";
 
 type MemberRef = { full_name: string } | null;
@@ -7,6 +8,10 @@ type MemberRef = { full_name: string } | null;
 export default async function RetosPage() {
   const supabase = await createClient();
   const today = todayInEcuador();
+
+  // Por si el cron de las 9:00 falló: la limpieza de fotos de los retos
+  // cerrados también corre al abrir esta pantalla. Es idempotente.
+  await purgeClosedChallengePhotos(supabase).catch((err) => console.error("[retos] purge", err));
 
   const [{ data: challenges }, { data: entries }, { data: reports }, { data: posts }] = await Promise.all([
     supabase

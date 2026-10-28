@@ -1,13 +1,15 @@
 "use server";
 
-// Retos y moderación de la comunidad de la app. Las reglas (solo staff escribe
-// retos y oculta publicaciones) viven en el RLS de
+// Retos (crear, editar, borrar) y moderación de la comunidad de la app. Las
+// reglas (solo staff escribe retos y oculta publicaciones) viven en el RLS de
 // 20261028020418_activities_challenges_community.sql; aquí se valida el
-// formulario, se avisa por push y se revalida.
+// formulario, se avisa por push y se revalida. Las fotos de un reto se borran
+// al cerrarse (lib/services/challenges.ts) o al borrar el reto.
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUsers } from "@/lib/push/expo";
+import { purgeChallengePhotos } from "@/lib/services/challenges";
 import { todayInEcuador } from "@ironfit/shared/date";
 import { revalidatePath } from "next/cache";
 import type { ActionData } from "@ironfit/shared/result";
@@ -55,44 +57,75 @@ async function pushToActiveMembers(title: string, body: string) {
   }
 }
 
+/** Valida el formulario y lo convierte en la fila de `challenges`. */
+function toRow(input: ChallengeInput) {
+  const title = input.title.trim();
+  if (title.length < 3) throw new Error("Escribe un título (mínimo 3 letras).");
+  if (!SPORTS.includes(input.sport)) throw new Error("Deporte no válido.");
+  if (!input.startsOn || !input.endsOn) throw new Error("Elige las fechas del reto.");
+  if (input.endsOn < input.startsOn) throw new Error("La fecha de cierre es antes del inicio.");
+  if (input.goalType !== "free" && !(input.goalValue && input.goalValue > 0)) {
+    throw new Error(input.goalType === "distance" ? "Escribe los km de la meta." : "Escribe los minutos de la meta.");
+  }
+  return {
+    title,
+    description: input.description.trim() || null,
+    sport: input.sport,
+    goal_type: input.goalType,
+    goal_distance_m: input.goalType === "distance" ? Math.round(input.goalValue! * 1000) : null,
+    goal_seconds: input.goalType === "time" ? Math.round(input.goalValue! * 60) : null,
+    starts_on: input.startsOn,
+    ends_on: input.endsOn,
+  };
+}
+
+const fail = (err: unknown): { ok: false; error: string } => ({
+  ok: false,
+  error: err instanceof Error ? err.message : "Error inesperado",
+});
+
 export async function createChallenge(input: ChallengeInput): Promise<ActionData<null>> {
   try {
     const { supabase } = await requireStaff();
-    const title = input.title.trim();
-    if (title.length < 3) return { ok: false, error: "Escribe un título (mínimo 3 letras)." };
-    if (!SPORTS.includes(input.sport)) return { ok: false, error: "Deporte no válido." };
-    if (!input.startsOn || !input.endsOn) return { ok: false, error: "Elige las fechas del reto." };
-    if (input.endsOn < input.startsOn) return { ok: false, error: "La fecha de cierre es antes del inicio." };
-    if (input.goalType !== "free" && !(input.goalValue && input.goalValue > 0)) {
-      return { ok: false, error: input.goalType === "distance" ? "Escribe los km de la meta." : "Escribe los minutos de la meta." };
-    }
-
-    const { error } = await supabase.from("challenges").insert({
-      title,
-      description: input.description.trim() || null,
-      sport: input.sport,
-      goal_type: input.goalType,
-      goal_distance_m: input.goalType === "distance" ? Math.round(input.goalValue! * 1000) : null,
-      goal_seconds: input.goalType === "time" ? Math.round(input.goalValue! * 60) : null,
-      starts_on: input.startsOn,
-      ends_on: input.endsOn,
-    });
+    const row = toRow(input);
+    const { error } = await supabase.from("challenges").insert(row);
     if (error) return { ok: false, error: error.message };
 
-    if (input.notify) await pushToActiveMembers("🏆 Nuevo reto Iron Fit", title);
+    if (input.notify) await pushToActiveMembers("🏆 Nuevo reto Iron Fit", row.title);
     revalidatePath("/admin/retos");
     return { ok: true, data: null };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Error inesperado" };
+    return fail(err);
   }
 }
 
+/** Editar un reto. Quien ya lo cumplió lo mantiene aunque cambie la meta. */
+export async function updateChallenge(id: string, input: ChallengeInput): Promise<ActionData<null>> {
+  try {
+    const { supabase } = await requireStaff();
+    const { error } = await supabase.from("challenges").update(toRow(input)).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+
+    if (input.notify) await pushToActiveMembers("Reto actualizado", input.title.trim());
+    revalidatePath("/admin/retos");
+    return { ok: true, data: null };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Borra el reto, quién lo cumplió, sus publicaciones y sus fotos. */
 export async function deleteChallenge(id: string): Promise<ActionData<null>> {
-  const supabase = await createClient();
-  const { error } = await supabase.from("challenges").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/admin/retos");
-  return { ok: true, data: null };
+  try {
+    const { supabase } = await requireStaff();
+    await purgeChallengePhotos(supabase, id);
+    const { error } = await supabase.from("challenges").delete().eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/admin/retos");
+    return { ok: true, data: null };
+  } catch (err) {
+    return fail(err);
+  }
 }
 
 /** Oculta (o vuelve a mostrar) una publicación y cierra sus reportes. */

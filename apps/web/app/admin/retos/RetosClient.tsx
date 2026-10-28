@@ -8,6 +8,7 @@ import {
   deleteChallenge,
   dismissReports,
   setPostHidden,
+  updateChallenge,
   type ChallengeInput,
 } from "./actions";
 
@@ -79,37 +80,44 @@ function weekend(today: string): [string, string] {
   return [sat, addDays(sat, 1)];
 }
 
-function ChallengeForm({ today }: { today: string }) {
+/** Valor del campo "meta" de un reto guardado (km o minutos). */
+function goalInputOf(c: ChallengeRow): string {
+  if (c.goalType === "distance" && c.goalDistanceM) return String(c.goalDistanceM / 1000);
+  if (c.goalType === "time" && c.goalSeconds) return String(Math.round(c.goalSeconds / 60));
+  return "";
+}
+
+/** Crear un reto o, con `editing`, editar uno existente. */
+function ChallengeForm({ today, editing, onDone }: { today: string; editing: ChallengeRow | null; onDone: () => void }) {
   const [sat, sun] = weekend(today);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [sport, setSport] = useState("run");
-  const [goalType, setGoalType] = useState<ChallengeInput["goalType"]>("distance");
-  const [goalValue, setGoalValue] = useState("");
-  const [startsOn, setStartsOn] = useState(sat);
-  const [endsOn, setEndsOn] = useState(sun);
-  const [notify, setNotify] = useState(true);
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [sport, setSport] = useState(editing?.sport ?? "run");
+  const [goalType, setGoalType] = useState<ChallengeInput["goalType"]>(editing?.goalType ?? "distance");
+  const [goalValue, setGoalValue] = useState(editing ? goalInputOf(editing) : "");
+  const [startsOn, setStartsOn] = useState(editing?.startsOn ?? sat);
+  const [endsOn, setEndsOn] = useState(editing?.endsOn ?? sun);
+  // Al editar, por defecto no se vuelve a avisar a todos.
+  const [notify, setNotify] = useState(!editing);
   const [pending, start] = useTransition();
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const value = goalValue.trim() === "" ? null : Number(goalValue.replace(",", "."));
+    const input: ChallengeInput = { title, description, sport, goalType, goalValue: value, startsOn, endsOn, notify };
     start(async () => {
-      const res = await createChallenge({
-        title,
-        description,
-        sport,
-        goalType,
-        goalValue: value,
-        startsOn,
-        endsOn,
-        notify,
-      });
+      const res = editing ? await updateChallenge(editing.id, input) : await createChallenge(input);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success(notify ? "Reto publicado y avisado a los socios" : "Reto publicado");
+      toast.success(
+        editing ? "Reto actualizado" : notify ? "Reto publicado y avisado a los socios" : "Reto publicado"
+      );
+      if (editing) {
+        onDone();
+        return;
+      }
       setTitle("");
       setDescription("");
       setGoalValue("");
@@ -117,12 +125,21 @@ function ChallengeForm({ today }: { today: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="bg-white/5 border border-line rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+    <form
+      onSubmit={submit}
+      className={`bg-white/5 border rounded-xl p-4 sm:p-5 flex flex-col gap-4 ${editing ? "border-accent" : "border-line"}`}
+    >
       <div>
-        <h3 className="font-display text-base uppercase tracking-tight">Nuevo reto</h3>
+        <h3 className="font-display text-base uppercase tracking-tight">
+          {editing ? `Editar: ${editing.title}` : "Nuevo reto"}
+        </h3>
         <p className="text-fg/40 text-xs mt-0.5">
           Los socios lo ven en la pestaña Comunidad de la app. Si registran una actividad que cumple la
           meta, el reto se marca solo.
+        </p>
+        <p className="text-amber-300/80 text-xs mt-1.5">
+          Las fotos que suban al reto se borran solas un día después de la fecha final. Deja tiempo
+          suficiente para que las suban y los demás las vean.
         </p>
       </div>
 
@@ -164,7 +181,7 @@ function ChallengeForm({ today }: { today: string }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <label className={labelMini} htmlFor="r-start">Desde</label>
-          <input id="r-start" type="date" className={inputCls} value={startsOn} min={today} onChange={(e) => setStartsOn(e.target.value)} />
+          <input id="r-start" type="date" className={inputCls} value={startsOn} min={editing ? undefined : today} onChange={(e) => setStartsOn(e.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className={labelMini} htmlFor="r-end">Hasta</label>
@@ -174,17 +191,32 @@ function ChallengeForm({ today }: { today: string }) {
 
       <label className="flex items-center gap-2 text-sm text-fg/70">
         <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="accent-accent" />
-        Avisar a los socios activos con una notificación
+        {editing ? "Avisar a los socios activos del cambio" : "Avisar a los socios activos con una notificación"}
       </label>
 
-      <button type="submit" disabled={pending} className={`${btnPrimary} self-start`}>
-        {pending ? "Publicando…" : "Publicar reto"}
-      </button>
+      <div className="flex gap-3">
+        <button type="submit" disabled={pending} className={btnPrimary}>
+          {pending ? "Guardando…" : editing ? "Guardar cambios" : "Publicar reto"}
+        </button>
+        {editing && (
+          <button type="button" disabled={pending} onClick={onDone} className="px-4 py-2.5 text-sm text-fg/50 hover:text-fg border border-line rounded-lg transition-colors">
+            Cancelar
+          </button>
+        )}
+      </div>
     </form>
   );
 }
 
-function ChallengeList({ challenges, today }: { challenges: ChallengeRow[]; today: string }) {
+function ChallengeList({
+  challenges,
+  today,
+  onEdit,
+}: {
+  challenges: ChallengeRow[];
+  today: string;
+  onEdit: (c: ChallengeRow) => void;
+}) {
   const [pending, start] = useTransition();
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
@@ -192,7 +224,7 @@ function ChallengeList({ challenges, today }: { challenges: ChallengeRow[]; toda
     start(async () => {
       const res = await deleteChallenge(id);
       if (!res.ok) toast.error(res.error);
-      else toast.success("Reto eliminado");
+      else toast.success("Reto eliminado con sus publicaciones y fotos");
       setConfirmId(null);
     });
   }
@@ -218,19 +250,25 @@ function ChallengeList({ challenges, today }: { challenges: ChallengeRow[]; toda
               </span>
               {confirmId === c.id ? (
                 <>
+                  <span className="text-fg/50 text-xs">¿Borrar con sus fotos?</span>
                   <button className={btnGhost} onClick={() => setConfirmId(null)} disabled={pending}>No</button>
                   <button className={`${btnGhost} text-red-400 border-red-500/40`} onClick={() => remove(c.id)} disabled={pending}>
                     Borrar
                   </button>
                 </>
               ) : (
-                <button
-                  className="text-fg/30 hover:text-red-400 text-lg leading-none px-1 transition-colors"
-                  onClick={() => setConfirmId(c.id)}
-                  aria-label={`Eliminar ${c.title}`}
-                >
-                  ×
-                </button>
+                <>
+                  <button className={btnGhost} onClick={() => onEdit(c)} aria-label={`Editar ${c.title}`}>
+                    Editar
+                  </button>
+                  <button
+                    className="text-fg/30 hover:text-red-400 text-lg leading-none px-1 transition-colors"
+                    onClick={() => setConfirmId(c.id)}
+                    aria-label={`Eliminar ${c.title}`}
+                  >
+                    ×
+                  </button>
+                </>
               )}
             </div>
           </li>
@@ -307,6 +345,7 @@ export default function RetosClient({
   posts: PostRow[];
   today: string;
 }) {
+  const [editing, setEditing] = useState<ChallengeRow | null>(null);
   const reported = useMemo(() => posts.filter((p) => p.reports > 0 && !p.hidden), [posts]);
   const recent = useMemo(() => posts.filter((p) => !(p.reports > 0 && !p.hidden)), [posts]);
 
@@ -326,10 +365,11 @@ export default function RetosClient({
       )}
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <ChallengeForm today={today} />
+        {/* key: al cambiar de reto el formulario arranca con sus valores. */}
+        <ChallengeForm key={editing?.id ?? "new"} today={today} editing={editing} onDone={() => setEditing(null)} />
         <section className="space-y-3">
           <h3 className="font-display text-base uppercase tracking-tight">Retos</h3>
-          <ChallengeList challenges={challenges} today={today} />
+          <ChallengeList challenges={challenges} today={today} onEdit={setEditing} />
         </section>
       </div>
 
