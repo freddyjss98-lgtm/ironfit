@@ -35,6 +35,7 @@ export const ADMIN_NAV: AdminLink[] = [
   { href: "/admin/productos", label: "Productos", short: "Productos", glyph: "▦", icon: "box" },
   { href: "/admin/coaches", label: "Coaches", short: "Coaches", glyph: "◎", icon: "user" },
   { href: "/admin/eventos", label: "Eventos", short: "Eventos", glyph: "◆", icon: "calendar", coach: true },
+  { href: "/admin/retos", label: "Retos y comunidad", short: "Retos", glyph: "▲", icon: "chart", coach: true },
   { href: "/admin/cuenta", label: "Mi cuenta", short: "Cuenta", glyph: "◍", icon: "gear", coach: true },
 ];
 

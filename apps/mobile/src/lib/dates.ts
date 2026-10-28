@@ -27,6 +27,21 @@ export function fmtWeekdayLong(ymd: string): string {
   return `${cap(WEEKDAYS[dow])} ${d} de ${MONTHS[m - 1]}`;
 }
 
+/** Fecha de Ecuador ('YYYY-MM-DD') de un instante ISO. */
+export function ecuadorDateOf(iso: string): string {
+  return new Date(Date.parse(iso) - ECUADOR_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** "ahora", "hace 5 min", "hace 3 h", "ayer", "12 oct". */
+export function fmtAgo(iso: string): string {
+  const min = Math.floor((Date.now() - Date.parse(iso)) / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  if (min < 24 * 60) return `hace ${Math.floor(min / 60)} h`;
+  if (min < 48 * 60) return 'ayer';
+  return fmtShort(ecuadorDateOf(iso));
+}
+
 /** Hora actual en Ecuador (0-23). */
 export function ecuadorHour(): number {
   return new Date(Date.now() - ECUADOR_OFFSET_MS).getUTCHours();

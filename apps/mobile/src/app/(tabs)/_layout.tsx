@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Tabs } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { Tabs, useRouter } from 'expo-router';
 import { useEffect, type ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
 
@@ -19,6 +20,13 @@ export default function TabsLayout() {
   useEffect(() => {
     registerForPush(false);
   }, []);
+
+  // Tocar el aviso de un reto nuevo abre la Comunidad.
+  const router = useRouter();
+  const lastPush = Notifications.useLastNotificationResponse();
+  useEffect(() => {
+    if (lastPush?.notification.request.content.data?.screen === 'comunidad') router.navigate('/comunidad');
+  }, [lastPush, router]);
 
   return (
     <Tabs
@@ -41,6 +49,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="clases"
         options={{ title: 'Entrenar', tabBarIcon: (p) => <TabIcon name="barbell-outline" {...p} /> }}
+      />
+      <Tabs.Screen
+        name="comunidad"
+        options={{ title: 'Comunidad', tabBarIcon: (p) => <TabIcon name="people-outline" {...p} /> }}
       />
       <Tabs.Screen
         name="perfil"

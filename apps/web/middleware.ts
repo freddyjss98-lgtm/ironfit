@@ -9,6 +9,7 @@ const COACH_ALLOWED = [
   "/admin/planificaciones",
   "/admin/miembros",
   "/admin/eventos",
+  "/admin/retos",
   "/admin/cuenta",
 ];
 

@@ -6,12 +6,13 @@ import { Segmented } from '@/components/segmented';
 import { Title } from '@/components/text';
 import { BodyTab } from '@/features/body/body-tab';
 import { RecordsTab } from '@/features/records/records-tab';
+import { SportsTab } from '@/features/sports/sports-tab';
 import { StrengthTab } from '@/features/strength/strength-tab';
 import { useActiveMembership } from '@/features/training/use-active';
 import { WodHistoryTab } from '@/features/wod/history-tab';
 import { useAuth } from '@/lib/auth';
 
-type Tab = 'records' | 'wods' | 'body' | 'strength';
+type Tab = 'records' | 'wods' | 'body' | 'strength' | 'sports';
 
 export default function ProgressScreen() {
   const { member, session } = useAuth();
@@ -24,7 +25,7 @@ export default function ProgressScreen() {
   async function refresh() {
     setRefreshing(true);
     await queryClient.invalidateQueries({
-      predicate: (q) => ['lifts', 'wod-history', 'body', 'strength', 'active'].includes(String(q.queryKey[0])),
+      predicate: (q) => ['lifts', 'wod-history', 'body', 'strength', 'activities', 'active'].includes(String(q.queryKey[0])),
     });
     setRefreshing(false);
   }
@@ -40,12 +41,14 @@ export default function ProgressScreen() {
           { value: 'wods', label: 'WODs' },
           { value: 'body', label: 'Cuerpo' },
           { value: 'strength', label: 'Fuerza' },
+          { value: 'sports', label: 'Deportes' },
         ]}
       />
       {tab === 'records' && <RecordsTab memberId={memberId} />}
       {tab === 'wods' && <WodHistoryTab memberId={memberId} />}
       {tab === 'body' && <BodyTab memberId={memberId} userId={session!.user.id} active={active.data !== false} />}
       {tab === 'strength' && <StrengthTab memberId={memberId} active={active.data !== false} />}
+      {tab === 'sports' && <SportsTab memberId={memberId} active={active.data !== false} />}
     </Screen>
   );
 }
