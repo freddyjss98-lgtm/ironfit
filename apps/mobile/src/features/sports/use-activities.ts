@@ -21,6 +21,7 @@ export type Activity = {
   calories_estimated: boolean;
   source: 'manual' | 'gps' | 'health';
   notes: string | null;
+  route_polyline: string | null;
 };
 
 export function useActivities(memberId: string) {
@@ -29,7 +30,7 @@ export function useActivities(memberId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('activities')
-        .select('id, sport, title, started_at, duration_seconds, distance_m, elevation_m, calories, calories_estimated, source, notes')
+        .select('id, sport, title, started_at, duration_seconds, distance_m, elevation_m, calories, calories_estimated, source, notes, route_polyline')
         .eq('member_id', memberId)
         .order('started_at', { ascending: false })
         .limit(200);
@@ -69,6 +70,8 @@ export type ActivityInput = {
   notes: string | null;
   share: boolean;
   photo: PickedPhoto | null;
+  /** Solo las grabadas con el GPS de la app. */
+  gps?: { route_polyline: string | null };
 };
 
 export function useLogActivity(memberId: string, userId: string) {
@@ -87,6 +90,7 @@ export function useLogActivity(memberId: string, userId: string) {
         p_notes: v.notes,
         p_share: v.share,
         p_photo_path: photoPath,
+        ...(v.gps ? { p_source: 'gps', p_route_polyline: v.gps.route_polyline } : {}),
       });
       if (error) {
         await removeCommunityPhoto(photoPath);

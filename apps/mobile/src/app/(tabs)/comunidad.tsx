@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { SectionLabel } from '@/components/card';
@@ -10,11 +10,12 @@ import { Title } from '@/components/text';
 import { ChallengeCard } from '@/features/community/challenge-card';
 import { PostCard } from '@/features/community/post-card';
 import { CommunityTerms } from '@/features/community/terms';
+import { RecordingBanner } from '@/features/gps/recording-banner';
 import { useChallenges, useCommunityTerms, useFeed } from '@/features/community/use-community';
 import { Locked } from '@/features/training/locked';
 import { useActiveMembership } from '@/features/training/use-active';
 import { useAuth } from '@/lib/auth';
-import { colors, fonts } from '@/theme';
+import { colors, fonts, space } from '@/theme';
 
 export default function CommunityScreen() {
   const { member } = useAuth();
@@ -50,6 +51,7 @@ export default function CommunityScreen() {
         <CommunityTerms memberId={memberId} />
       ) : (
         <>
+          <RecordingBanner />
           <SectionLabel>Retos</SectionLabel>
           {challenges.isPending ? (
             <ActivityIndicator color={colors.accent} />
@@ -58,7 +60,10 @@ export default function CommunityScreen() {
           ) : (
             challenges.data!.map((c) => <ChallengeCard key={c.id} challenge={c} />)
           )}
-          <Button label="Registrar actividad" variant="secondary" onPress={() => router.push('/deportes/registrar')} />
+          <View style={styles.actions}>
+            <Button label="Grabar con GPS" variant="secondary" onPress={() => router.push('/deportes/grabar')} />
+            <Button label="Registrar a mano" variant="ghost" onPress={() => router.push('/deportes/registrar')} />
+          </View>
 
           <SectionLabel>Lo último del box</SectionLabel>
           {feed.isPending ? (
@@ -86,4 +91,5 @@ export default function CommunityScreen() {
 
 const styles = StyleSheet.create({
   empty: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.fgDim },
+  actions: { gap: space.xs },
 });

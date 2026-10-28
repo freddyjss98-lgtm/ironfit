@@ -38,6 +38,7 @@ export type Post = {
   distance_m: number | null;
   elevation_m: number | null;
   calories: number | null;
+  route_polyline: string | null;
   fire_count: number;
   fired: boolean;
 };

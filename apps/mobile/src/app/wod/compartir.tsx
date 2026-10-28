@@ -1,10 +1,6 @@
-import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams } from 'expo-router';
-import * as MediaLibrary from 'expo-media-library';
-import * as Sharing from 'expo-sharing';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
-import { captureRef } from 'react-native-view-shot';
+import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -16,6 +12,7 @@ import { useDayRecords, useDayWod } from '@/features/wod/use-day-wod';
 import { useMyResult } from '@/features/wod/use-wod';
 import { wodSections } from '@/features/wod/wod-parts';
 import { useAuth } from '@/lib/auth';
+import { useCardExport } from '@/lib/card-export';
 import { colors, fonts, radius, space } from '@/theme';
 
 const DAYS = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
@@ -39,7 +36,7 @@ export default function ShareWodScreen() {
   const [showStreak, setShowStreak] = useState(true);
   const [showRecords, setShowRecords] = useState(true);
   const [showWarmup, setShowWarmup] = useState(true);
-  const [busy, setBusy] = useState<null | 'save' | 'copy' | 'share'>(null);
+  const { busy, save, copy, share } = useCardExport(cardRef, 'Compartir mi WOD');
 
   if (result.isPending || wod.isPending || records.isPending) {
     return (
@@ -75,40 +72,6 @@ export default function ShareWodScreen() {
     streak: showStreak ? streak : null,
     rx: result.data ? result.data.rx : null,
   };
-
-  // PNG transparente a 1080 px de ancho (lo que usa Instagram).
-  const capture = (as: 'tmpfile' | 'base64') => captureRef(cardRef, { format: 'png', result: as, width: 1080 });
-
-  async function run(kind: 'save' | 'copy' | 'share', fn: () => Promise<void>) {
-    setBusy(kind);
-    try {
-      await fn();
-    } catch (e) {
-      Alert.alert('No se pudo', e instanceof Error ? e.message : 'Inténtalo de nuevo.');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const save = () =>
-    run('save', async () => {
-      const perm = await MediaLibrary.requestPermissionsAsync(true);
-      if (!perm.granted) throw new Error('Permite guardar en tus fotos desde los ajustes del teléfono.');
-      await MediaLibrary.Asset.create(await capture('tmpfile'));
-      Alert.alert('Guardada en tus fotos', 'En tu historia de Instagram, toca el sticker de Foto y elige la imagen.');
-    });
-
-  const copy = () =>
-    run('copy', async () => {
-      await Clipboard.setImageAsync(await capture('base64'));
-      Alert.alert('Copiada', 'Abre tu historia de Instagram, toma o elige tu foto y pega la tarjeta encima.');
-    });
-
-  const share = () =>
-    run('share', async () => {
-      if (!(await Sharing.isAvailableAsync())) throw new Error('Compartir no está disponible en este teléfono.');
-      await Sharing.shareAsync(await capture('tmpfile'), { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Compartir mi WOD' });
-    });
 
   return (
     <Screen>

@@ -24,7 +24,8 @@
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO"
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "web": {
@@ -45,8 +46,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Iron Fit usa tus fotos para tu foto de perfil y los comprobantes de pago.",
-          "cameraPermission": "Iron Fit usa la cámara para tu foto de perfil y los comprobantes de pago."
+          "photosPermission": "Iron Fit usa tus fotos para tu foto de perfil, los comprobantes de pago y lo que compartes en la comunidad.",
+          "cameraPermission": "Iron Fit usa la cámara para tu foto de perfil, los comprobantes de pago y las fotos de tus retos."
         }
       ],
       [
@@ -59,9 +60,20 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Iron Fit guarda en tus fotos la tarjeta de tu WOD para compartirla.",
-          "savePhotosPermission": "Iron Fit guarda en tus fotos la tarjeta de tu WOD para compartirla.",
+          "photosPermission": "Iron Fit guarda en tus fotos las tarjetas de tu WOD y de tus actividades para compartirlas.",
+          "savePhotosPermission": "Iron Fit guarda en tus fotos las tarjetas de tu WOD y de tus actividades para compartirlas.",
           "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Iron Fit usa tu ubicación solo mientras grabas una actividad, para medir la distancia y dibujar tu recorrido.",
+          "locationAlwaysAndWhenInUsePermission": "Iron Fit usa tu ubicación solo mientras grabas una actividad, para medir la distancia y dibujar tu recorrido.",
+          "locationAlwaysPermission": "Iron Fit usa tu ubicación solo mientras grabas una actividad, para medir la distancia y dibujar tu recorrido.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": true
         }
       ]
     ],

@@ -39,6 +39,18 @@ export function fmtDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/** Cronómetro: 125 → "2:05"; 3725 → "1:02:05". */
+export function fmtClock(seconds: number): string {
+  const s = Math.floor(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+/** Deportes que se pueden grabar con GPS (en la piscina no sirve). */
+export const GPS_SPORTS = SPORTS.filter((s) => s.key !== 'swim');
+
 /** Ritmo por km (correr/caminar/montaña) o velocidad (bici). */
 export function fmtPace(sport: string, seconds: number, meters: number | null | undefined): string | null {
   if (!meters || meters < 100 || seconds <= 0) return null;

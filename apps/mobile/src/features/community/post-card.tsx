@@ -2,10 +2,13 @@
 // datos y el 🔥. El menú ⋯ permite reportar o bloquear (o borrar la propia).
 
 import { Image } from 'expo-image';
+import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Card } from '@/components/card';
+import { decodePolyline } from '@/features/gps/geo';
+import { RouteSvg } from '@/features/gps/route-svg';
 import { fmtDistance, fmtDuration, fmtPace, sportEmoji, sportLabel } from '@/features/sports/sports';
 import { fmtAgo } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/theme';
@@ -17,6 +20,7 @@ export function PostCard({ post, memberId }: { post: Post; memberId: string }) {
   const report = useReportPost();
   const block = useBlockAuthor();
   const del = useDeletePost();
+  const [routeW, setRouteW] = useState(0);
 
   const fail = (title: string) => (e: Error) => Alert.alert(title, e.message);
 
@@ -105,6 +109,12 @@ export function PostCard({ post, memberId }: { post: Post; memberId: string }) {
         <Image source={{ uri: post.photo_url }} style={styles.photo} contentFit="cover" transition={150} accessibilityLabel="Foto de la publicación" />
       ) : null}
 
+      {post.route_polyline ? (
+        <View style={styles.route} onLayout={(e) => setRouteW(e.nativeEvent.layout.width)}>
+          {routeW > 0 && <RouteSvg points={decodePolyline(post.route_polyline)} width={routeW} height={post.photo_url ? 120 : 200} />}
+        </View>
+      ) : null}
+
       {stats.length > 0 && (
         <View style={styles.stats}>
           {post.challenge_title && post.sport ? <Text style={styles.stat}>{sportEmoji(post.sport)}</Text> : null}
@@ -139,6 +149,7 @@ const styles = StyleSheet.create({
   more: { fontSize: 22, color: colors.fgDim, paddingHorizontal: space.xs },
   badge: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.accent },
   photo: { width: '100%', aspectRatio: 4 / 5, borderRadius: radius.md, backgroundColor: colors.bg2 },
+  route: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: radius.md, overflow: 'hidden' },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   stat: {
     fontFamily: fonts.cond,

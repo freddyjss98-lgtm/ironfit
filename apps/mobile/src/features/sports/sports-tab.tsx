@@ -7,6 +7,9 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 
 import { Button } from '@/components/button';
 import { Card, SectionLabel } from '@/components/card';
+import { decodePolyline } from '@/features/gps/geo';
+import { RecordingBanner } from '@/features/gps/recording-banner';
+import { RouteSvg } from '@/features/gps/route-svg';
 import { Locked } from '@/features/training/locked';
 import { ecuadorDateOf, fmtShort } from '@/lib/dates';
 import { colors, fonts, space } from '@/theme';
@@ -74,8 +77,12 @@ export function SportsTab({ memberId, active }: { memberId: string; active: bool
 
   return (
     <>
+      <RecordingBanner />
       {active ? (
-        <Button label="Registrar actividad" onPress={() => router.push('/deportes/registrar')} />
+        <View style={styles.actions}>
+          <Button label="Grabar con GPS" onPress={() => router.push('/deportes/grabar')} />
+          <Button label="Registrar a mano" variant="secondary" onPress={() => router.push('/deportes/registrar')} />
+        </View>
       ) : (
         <Locked what="Registrar actividades" />
       )}
@@ -92,10 +99,17 @@ export function SportsTab({ memberId, active }: { memberId: string; active: bool
           {rows.map((a, i) => (
             <Pressable
               key={a.id}
+              onPress={() => router.push({ pathname: '/deportes/compartir', params: { id: a.id } })}
               onLongPress={() => remove(a)}
-              accessibilityHint="Mantén presionado para borrar"
-              style={[styles.row, i > 0 && styles.rowBorder]}>
-              <Text style={styles.emoji}>{sportEmoji(a.sport)}</Text>
+              accessibilityHint="Toca para compartir; mantén presionado para borrar"
+              style={({ pressed }) => [styles.row, i > 0 && styles.rowBorder, pressed && { opacity: 0.7 }]}>
+              {a.route_polyline ? (
+                <View style={styles.thumb}>
+                  <RouteSvg points={decodePolyline(a.route_polyline)} width={40} height={40} strokeWidth={2} />
+                </View>
+              ) : (
+                <Text style={styles.emoji}>{sportEmoji(a.sport)}</Text>
+              )}
               <View style={styles.flex}>
                 <Text style={styles.name}>
                   {sportLabel(a.sport)} · {fmtShort(day(a))}
@@ -115,7 +129,7 @@ export function SportsTab({ memberId, active }: { memberId: string; active: bool
           ))}
         </Card>
       )}
-      {rows.length > 0 && <Text style={styles.hint}>Mantén presionada una actividad para borrarla.</Text>}
+      {rows.length > 0 && <Text style={styles.hint}>Toca una actividad para compartirla; mantenla presionada para borrarla.</Text>}
     </>
   );
 }
@@ -131,7 +145,9 @@ const styles = StyleSheet.create({
   list: { padding: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md },
   rowBorder: { borderTopWidth: 1, borderTopColor: 'rgba(36,36,36,0.6)' },
-  emoji: { fontSize: 22 },
+  emoji: { fontSize: 22, width: 40, textAlign: 'center' },
+  thumb: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
+  actions: { gap: space.sm },
   name: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.fg },
   small: { fontFamily: fonts.body, fontSize: 12, color: colors.fgMute },
   dist: { fontFamily: fonts.display, fontSize: 18, color: colors.accent },

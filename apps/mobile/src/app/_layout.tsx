@@ -14,6 +14,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
+// Define la tarea de ubicación en el ámbito global (la necesita el sistema al
+// despertar la app mientras se graba una actividad).
+import '@/features/gps/recorder';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { colors, fonts } from '@/theme';
 
@@ -89,6 +92,9 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
         <Stack.Screen name="fuerza/sesion" options={{ ...pushed, title: 'Registrar sesión' }} />
         <Stack.Screen name="fuerza/rutina" options={{ ...pushed, title: 'Nueva rutina' }} />
         <Stack.Screen name="deportes/registrar" options={{ ...pushed, title: 'Registrar actividad' }} />
+        <Stack.Screen name="deportes/grabar" options={{ ...pushed, title: 'Grabar actividad' }} />
+        <Stack.Screen name="deportes/guardar" options={{ ...pushed, title: 'Guardar actividad' }} />
+        <Stack.Screen name="deportes/compartir" options={{ ...pushed, title: 'Compartir actividad' }} />
         <Stack.Screen name="reto/[id]" options={{ ...pushed, title: 'Reto cumplido' }} />
         <Stack.Screen name="tienda" options={{ ...pushed, title: 'Tienda' }} />
         <Stack.Screen name="perfil/editar" options={{ ...pushed, title: 'Editar perfil' }} />
