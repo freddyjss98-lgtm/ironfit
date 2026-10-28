@@ -77,6 +77,7 @@ export default function RecordScreen() {
           label="¿Qué vas a hacer?"
           value={sport}
           onChange={setSport}
+          columns={3}
           options={GPS_SPORTS.map((s) => ({ value: s.key, label: `${s.emoji} ${s.label}` }))}
         />
         <Card style={styles.tips}>
@@ -95,7 +96,8 @@ export default function RecordScreen() {
   const live = rec.status === 'recording' ? currentPace(rec.points, now) : null;
   const paceSecs = live ?? (stats.distance_m >= 100 ? seconds / (stats.distance_m / 1000) : null);
   const km = (stats.distance_m / 1000).toFixed(2);
-  const waiting = rec.points.length === 0;
+  // Con un solo punto todavía no hay línea que dibujar.
+  const waiting = rec.points.length < 2;
   const routeW = Math.min(width - space.xl * 2, 420);
 
   function confirmFinish() {

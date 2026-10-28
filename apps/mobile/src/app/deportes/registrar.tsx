@@ -107,6 +107,7 @@ export default function LogActivityScreen() {
         label="Deporte"
         value={sport}
         onChange={setSport}
+        columns={3}
         options={SPORTS.map((s) => ({ value: s.key, label: `${s.emoji} ${s.label}` }))}
       />
 

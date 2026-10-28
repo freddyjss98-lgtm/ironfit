@@ -40,6 +40,8 @@ export type Recording = {
   points: GpsPoint[];
   /** Precisión del último fix recibido (aunque se descarte), para el indicador de señal. */
   lastAccuracy: number | null;
+  /** Saltos imposibles seguidos (ver appendLocations). */
+  jumps?: number;
 };
 
 type Listener = (r: Recording | null) => void;
@@ -104,8 +106,18 @@ function appendLocations(locations: Location.LocationObject[]) {
         if (p.t <= last.t) continue;
         const d = haversine(last.lat, last.lng, p.lat, p.lng);
         if (d < MIN_STEP) continue;
-        if (d / ((p.t - last.t) / 1000) > MAX_SPEED) continue;
+        if (d / ((p.t - last.t) / 1000) > MAX_SPEED) {
+          // Un salto suelto se ignora. Si los puntos siguientes siguen "lejos",
+          // el que estaba mal era el anterior (p. ej. el primer fix al salir
+          // de un edificio): se empieza un tramo nuevo desde aquí, sin sumar
+          // la distancia del salto.
+          r.jumps = (r.jumps ?? 0) + 1;
+          if (r.jumps < 3) continue;
+          r.seg += 1;
+          p.seg = r.seg;
+        }
       }
+      r.jumps = 0;
       r.points.push(p);
     }
     await store(r);
