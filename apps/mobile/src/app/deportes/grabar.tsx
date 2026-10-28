@@ -148,7 +148,7 @@ export default function RecordScreen() {
       <View style={[styles.route, { height: 220 }]}>
         {waiting ? (
           <View style={styles.waiting}>
-            <ActivityIndicator color={colors.accent} />
+            {rec.status === 'recording' && <ActivityIndicator color={colors.accent} />}
             <Text style={styles.waitingText}>
               {rec.status === 'paused'
                 ? 'En pausa'
