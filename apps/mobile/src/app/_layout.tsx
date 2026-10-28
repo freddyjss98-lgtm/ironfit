@@ -97,6 +97,7 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
         <Stack.Screen name="deportes/compartir" options={{ ...pushed, title: 'Compartir actividad' }} />
         <Stack.Screen name="reto/[id]" options={{ ...pushed, title: 'Reto cumplido' }} />
         <Stack.Screen name="tienda" options={{ ...pushed, title: 'Tienda' }} />
+        <Stack.Screen name="perfil/index" options={{ ...pushed, title: 'Mi perfil' }} />
         <Stack.Screen name="perfil/editar" options={{ ...pushed, title: 'Editar perfil' }} />
         <Stack.Screen name="perfil/clave" options={{ ...pushed, title: 'Cambiar contraseña' }} />
         <Stack.Screen name="perfil/eliminar" options={{ ...pushed, title: 'Eliminar cuenta' }} />

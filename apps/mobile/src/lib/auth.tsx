@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { unregisterPush } from './push';
 import { supabase } from './supabase';
 
-export type Member = { id: string; full_name: string; birthday: string | null };
+export type Member = { id: string; full_name: string; birthday: string | null; photo_url: string | null };
 
 export type AuthStatus =
   | 'loading'
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: async (): Promise<Member | null> => {
       const { data, error } = await supabase
         .from('members')
-        .select('id, full_name, birthday')
+        .select('id, full_name, birthday, photo_url')
         .eq('user_id', userId!)
         .is('deleted_at', null)
         .maybeSingle();

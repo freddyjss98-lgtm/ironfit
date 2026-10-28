@@ -13,10 +13,11 @@ function TabIcon({ name, color, size }: { name: IconName; color: ColorValue; siz
   return <Ionicons name={name} color={color} size={size} />;
 }
 
-// Mismo orden que la barra inferior del portal web (PortalShell).
+// Como la barra del portal web (PortalShell), con Deportes y Comunidad en vez
+// de Perfil: el perfil se abre desde el avatar del inicio.
 export default function TabsLayout() {
   // Si el socio ya aceptó las notificaciones, se re-registra el token en
-  // silencio (puede haber cambiado). El permiso se pide desde Perfil.
+  // silencio (puede haber cambiado). El permiso se pide desde el perfil.
   useEffect(() => {
     registerForPush(false);
   }, []);
@@ -51,12 +52,12 @@ export default function TabsLayout() {
         options={{ title: 'Entrenar', tabBarIcon: (p) => <TabIcon name="barbell-outline" {...p} /> }}
       />
       <Tabs.Screen
-        name="comunidad"
-        options={{ title: 'Comunidad', tabBarIcon: (p) => <TabIcon name="people-outline" {...p} /> }}
+        name="deportes"
+        options={{ title: 'Deportes', tabBarIcon: (p) => <TabIcon name="walk-outline" {...p} /> }}
       />
       <Tabs.Screen
-        name="perfil"
-        options={{ title: 'Perfil', tabBarIcon: (p) => <TabIcon name="person-outline" {...p} /> }}
+        name="comunidad"
+        options={{ title: 'Comunidad', tabBarIcon: (p) => <TabIcon name="people-outline" {...p} /> }}
       />
     </Tabs>
   );

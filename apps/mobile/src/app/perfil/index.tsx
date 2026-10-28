@@ -7,7 +7,6 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Notice } from '@/components/notice';
 import { Screen } from '@/components/screen';
-import { Eyebrow } from '@/components/text';
 import { useProfile, type ProfileMembership } from '@/features/profile/use-profile';
 import { BoardPrivacy } from '@/features/wod/board-privacy';
 import { useAuth } from '@/lib/auth';
@@ -89,8 +88,6 @@ export default function ProfileScreen() {
 
   return (
     <Screen onRefresh={() => profile.refetch()} refreshing={profile.isRefetching}>
-      <Eyebrow>Perfil</Eyebrow>
-
       <Card style={styles.header}>
         <Avatar name={p.full_name} url={p.photo_url} />
         <View style={styles.flex}>

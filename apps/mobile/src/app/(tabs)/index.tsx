@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/avatar';
 import { Button } from '@/components/button';
 import { Notice } from '@/components/notice';
 import { Screen } from '@/components/screen';
@@ -39,6 +40,14 @@ export default function HomeScreen() {
           <Title>{firstName}</Title>
         </View>
         {home.data && <StreakBadge streak={home.data.stats.currentStreak} />}
+        <Pressable
+          onPress={() => router.push('/perfil')}
+          accessibilityRole="button"
+          accessibilityLabel="Mi perfil"
+          hitSlop={8}
+          style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.7 }]}>
+          <Avatar name={member!.full_name} url={member!.photo_url} size={44} />
+        </Pressable>
       </View>
 
       {home.isPending ? (
@@ -93,7 +102,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   gap: { gap: space.md },
-  header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.lg },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  avatar: { borderRadius: 24, borderWidth: 2, borderColor: colors.line2 },
   loading: { marginTop: space.xxl },
   sectionTitle: {
     fontFamily: fonts.condSemi,
