@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 
@@ -10,6 +11,7 @@ import { Screen } from '@/components/screen';
 import { useProfile, type ProfileMembership } from '@/features/profile/use-profile';
 import { BoardPrivacy } from '@/features/wod/board-privacy';
 import { useAuth } from '@/lib/auth';
+import { WEB_URL } from '@/lib/config';
 import { pushPermissionGranted, registerForPush } from '@/lib/push';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -113,6 +115,8 @@ export default function ProfileScreen() {
       <Button label="Editar perfil" onPress={() => router.push('/perfil/editar')} />
       <Button label="Cambiar contraseña" variant="secondary" onPress={() => router.push('/perfil/clave')} />
       {push === 'off' && <Button label="Activar notificaciones" variant="secondary" onPress={enablePush} />}
+
+      <Button label="Política de privacidad" variant="ghost" onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/privacidad`)} />
 
       <View style={styles.danger}>
         <Button label="Cerrar sesión" variant="ghost" onPress={() => signOut()} />

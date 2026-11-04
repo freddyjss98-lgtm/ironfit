@@ -60,6 +60,22 @@ export async function deleteMemberAccount(userId: string): Promise<void> {
     await deleteWhere(admin, "workout_sessions", memberId);
     await deleteWhere(admin, "routines", memberId);
     await deleteWhere(admin, "exercises", memberId);
+    await deleteWhere(admin, "wod_results", memberId);
+    await deleteWhere(admin, "lift_records", memberId);
+
+    // Deportes y comunidad: las rutas del GPS son datos de ubicación. Primero
+    // lo que apunta a otras filas (publicaciones → retos/actividades).
+    await deleteWhere(admin, "post_reactions", memberId);
+    await deleteWhere(admin, "post_reports", memberId);
+    await deleteWhere(admin, "community_posts", memberId);
+    await deleteWhere(admin, "challenge_entries", memberId);
+    await deleteWhere(admin, "activities", memberId);
+    await deleteWhere(admin, "member_blocks", memberId);
+    const { error: blockedErr } = await admin.from("member_blocks").delete().eq("blocked_member_id", memberId);
+    if (blockedErr) throw new Error(blockedErr.message);
+    // Fotos de la comunidad: viven en la carpeta '<userId>/' del bucket.
+    const { data: photos } = await admin.storage.from("community").list(userId, { limit: 1000 });
+    if (photos?.length) await admin.storage.from("community").remove(photos.map((f) => `${userId}/${f.name}`));
 
     // Conversaciones con el bot de WhatsApp: contenido personal.
     await deleteWhere(admin, "whatsapp_messages", memberId);
@@ -89,6 +105,8 @@ export async function deleteMemberAccount(userId: string): Promise<void> {
         emergency_contact_name: null,
         emergency_contact_phone: null,
         notes: null,
+        community_terms_at: null,
+        hide_from_board: false,
         status: "inactive",
         deleted_at: new Date().toISOString(),
       })
@@ -97,6 +115,10 @@ export async function deleteMemberAccount(userId: string): Promise<void> {
 
     await removeFiles(admin, "member-photos", [member.photo_url as string | null]);
   }
+
+  // Los tokens de push no tienen llave hacia auth.users: se borran a mano.
+  const { error: tokensErr } = await admin.from("push_tokens").delete().eq("user_id", userId);
+  if (tokensErr) throw new Error(tokensErr.message);
 
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) throw new Error(error.message);

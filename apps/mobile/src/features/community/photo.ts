@@ -14,12 +14,10 @@ const MAX_SIDE = 1080;
 export type PickedPhoto = { uri: string };
 
 async function pick(source: 'camera' | 'library'): Promise<PickedPhoto | null> {
-  const perm =
-    source === 'camera'
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) {
-    Alert.alert('Permiso necesario', 'Permite el acceso en los ajustes del teléfono para subir tu foto.');
+  // La galería abre el selector del sistema, que no necesita permiso (y las
+  // tiendas piden no solicitar acceso a todas las fotos). Solo la cámara lo pide.
+  if (source === 'camera' && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+    Alert.alert('Permiso necesario', 'Permite el acceso a la cámara en los ajustes del teléfono para subir tu foto.');
     return null;
   }
   const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1 };

@@ -21,9 +21,15 @@ export default function Footer() {
         </a>
 
         <div className="mt-12 pt-8 border-t border-line grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-          <p className="t-mono-label text-fg-mute">
-            © 2024–{year} {site.brand} · {site.city}
-          </p>
+          <div className="t-mono-label text-fg-mute space-y-2">
+            <p>
+              © 2024–{year} {site.brand} · {site.city}
+            </p>
+            <p className="flex gap-4">
+              <a href="/privacidad" className="hover:text-accent">Privacidad</a>
+              <a href="/eliminar-cuenta" className="hover:text-accent">Eliminar cuenta</a>
+            </p>
+          </div>
           <p className="font-condensed text-fg-dim md:text-center">
             Enfócate en tu progreso, no en tus limitaciones.
           </p>

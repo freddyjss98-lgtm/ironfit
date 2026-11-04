@@ -142,10 +142,9 @@ function RenewForm({ plans, bank, memberId, userId }: { plans: Plan[]; bank: Ban
   }
 
   async function fromImage(source: 'camera' | 'library') {
-    const perm =
-      source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permiso necesario', 'Permite el acceso en los ajustes del teléfono para subir el comprobante.');
+    // La galería usa el selector del sistema (sin permiso); solo la cámara lo pide.
+    if (source === 'camera' && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+      Alert.alert('Permiso necesario', 'Permite el acceso a la cámara en los ajustes del teléfono para subir el comprobante.');
       return;
     }
     const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.8 };

@@ -53,12 +53,9 @@ function EditForm({ current, memberId, userId }: { current: Profile; memberId: s
       aspect: [1, 1],
       quality: 0.7,
     };
-    const perm =
-      source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permiso necesario', 'Permite el acceso en los ajustes del teléfono para cambiar tu foto.');
+    // La galería usa el selector del sistema (sin permiso); solo la cámara lo pide.
+    if (source === 'camera' && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+      Alert.alert('Permiso necesario', 'Permite el acceso a la cámara en los ajustes del teléfono para cambiar tu foto.');
       return;
     }
     const result =
