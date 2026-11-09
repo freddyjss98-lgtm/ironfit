@@ -26,6 +26,10 @@ const ERRORES: Record<number, MetaError> = {
     que: "El número no puede recibir el mensaje",
     accion: "Suele ser que no tiene WhatsApp o está mal escrito. Verifica el número del socio.",
   },
+  130472: {
+    que: "Meta no entregó este mensaje de marketing a este número",
+    accion: "El número cayó en un experimento de Meta. No depende del gimnasio y no se reintenta.",
+  },
   132001: {
     que: "La plantilla no existe con ese nombre o idioma",
     accion: "Compara el nombre exacto en WhatsApp Manager con el que usa el sistema.",
@@ -63,6 +67,37 @@ const ERRORES: Record<number, MetaError> = {
     accion: "Hay que volver a registrarlo en WhatsApp Manager.",
   },
 };
+
+/**
+ * Fallos posteriores a la aceptación de Meta que se resuelven solos o arreglando
+ * la cuenta. Cualquier otro código apunta al destinatario y repetirlo no cambia nada.
+ */
+const REINTENTABLES = new Set([
+  131042, // método de pago caído
+  131031, // cuenta bloqueada
+  131048, // límite por calidad
+  130429, // demasiados mensajes
+  133010, // número no registrado
+  131000, // error interno de Meta
+  131016, // servicio no disponible
+  133004, // servidor no disponible
+]);
+
+/**
+ * ¿Este fallo ya es definitivo para el cron?
+ *
+ * Meta responde 200 al enviar y avisa del rechazo después, por webhook. Como la
+ * copia al admin sale en ese 200, reintentar a un número que no puede recibir
+ * le mandaba al admin una copia diaria de un mensaje que el socio nunca recibió.
+ * Si Meta ni siquiera lo aceptó (sin wamid) no salió nada y sí se reintenta.
+ */
+export function esFalloDefinitivo(fila: {
+  provider_message_id: string | null;
+  error_code: number | null;
+}): boolean {
+  if (!fila.provider_message_id) return false;
+  return fila.error_code == null || !REINTENTABLES.has(fila.error_code);
+}
 
 /**
  * Traduce el error de una fila del log. `code` puede venir null en los fallos
