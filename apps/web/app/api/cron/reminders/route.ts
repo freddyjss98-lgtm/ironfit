@@ -13,7 +13,8 @@
 //
 // Sin credenciales de Meta corre en "dry_run": registra en reminder_log lo que
 // habría enviado, sin mandar nada real. La idempotencia (por tipo + member +
-// reference_date, ignorando 'failed') evita duplicados y reintenta los fallidos.
+// reference_date) evita duplicados; solo se reintentan los fallos que pueden
+// resolverse (ver esFalloDefinitivo).
 // =============================================================================
 
 import { NextRequest } from "next/server";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/reminders/processors";
 import { REMINDER_TYPE_EXPIRY } from "@/lib/reminders/expiry";
 import { pushToMember } from "@/lib/push/expo";
+import { esFalloDefinitivo } from "@/lib/whatsapp/metaErrors";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -83,24 +85,29 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    // ── 2. Idempotencia: excluir a quienes ya se les avisó (no fallidos) ────
+    // ── 2. Idempotencia: excluir a quienes ya se les avisó ─────────────────
+    // Un fallo definitivo solo cierra el aviso para ESE número: si recepción lo
+    // corrige en la ficha, el socio vuelve a ser candidato.
     const memberIds = candidates.map((c) => c.memberId);
     const alreadySent = new Set<string>();
+    const deadNumbers = new Set<string>();
     if (memberIds.length > 0) {
       const { data: logs } = await supabase
         .from("reminder_log")
-        .select("member_id, reference_date")
+        .select("member_id, reference_date, status, to_phone, provider_message_id, error_code")
         .eq("reminder_type", processor.type)
-        .neq("status", "failed")
         .in("member_id", memberIds);
       for (const l of logs ?? []) {
-        alreadySent.add(`${l.member_id}|${l.reference_date}`);
+        const key = `${l.member_id}|${l.reference_date}`;
+        if (l.status !== "failed") alreadySent.add(key);
+        else if (esFalloDefinitivo(l)) deadNumbers.add(`${key}|${l.to_phone}`);
       }
     }
 
-    const pending = candidates.filter(
-      (c) => !alreadySent.has(`${c.memberId}|${c.referenceDate}`)
-    );
+    const pending = candidates.filter((c) => {
+      const key = `${c.memberId}|${c.referenceDate}`;
+      return !alreadySent.has(key) && !deadNumbers.has(`${key}|${c.phone}`);
+    });
 
     // ── 3. Enviar (o simular) y registrar ──────────────────────────────────
     let sent = 0;
