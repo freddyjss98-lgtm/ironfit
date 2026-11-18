@@ -13,6 +13,7 @@ import { useDeleteResult, useMyResult, useSaveResult, type MyResult } from '@/fe
 import { detectParts, guessType, parseScore, partScheme, scoreToInput, type PartScore } from '@/features/wod/wod-parts';
 import { useAuth } from '@/lib/auth';
 import { fmtWeekdayLong } from '@/lib/dates';
+import { alertQueued } from '@/lib/offline/outbox';
 import { colors, fonts, radius, space } from '@/theme';
 
 const TYPES: ScoreType[] = ['time', 'rounds', 'load', 'reps'];
@@ -71,7 +72,8 @@ function MyWodForm({
   schemes: Record<string, string>;
 }) {
   const router = useRouter();
-  const save = useSaveResult(memberId, date);
+  const { session } = useAuth();
+  const save = useSaveResult(memberId, date, session!.user.id);
   const remove = useDeleteResult(memberId, date);
   const [rows, setRows] = useState<Row[]>(() => initialRows(labels, current, schemes));
   const [rx, setRx] = useState<'rx' | 'scaled'>(current && !current.rx ? 'scaled' : 'rx');
@@ -97,7 +99,7 @@ function MyWodForm({
     if (filled.length === 0) return true; // nada que guardar: igual se puede compartir
     const main = filled[0]; // el primero que anotó es el que va a la pizarra
     try {
-      await save.mutateAsync({
+      const r = await save.mutateAsync({
         score_type: main.score_type,
         time_seconds: main.time_seconds,
         capped: false,
@@ -108,6 +110,7 @@ function MyWodForm({
         notes: notes.trim() || null,
         parts: labels.length ? filled : [],
       });
+      if (r.queued) alertQueued('Tu resultado aparecerá en la pizarra cuando se envíe.');
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.');

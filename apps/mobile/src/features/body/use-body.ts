@@ -2,7 +2,9 @@
 
 import { todayInEcuador } from '@ironfit/shared/date';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
+import { isLocalId, removeItem, sendOrQueue, usePending } from '@/lib/offline/outbox';
 import { supabase } from '@/lib/supabase';
 
 export const METRICS = [
@@ -23,9 +25,26 @@ export type Measurement = { id: string; measured_at: string; notes: string | nul
   number | null
 >;
 
+type BodyData = { rows: Measurement[]; targetWeight: number | null; heightCm: number | null };
+
 export function useBody(memberId: string, userId: string) {
+  // Las medidas anotadas sin internet se ven mientras esperan en la bandeja.
+  const pending = usePending<PendingMeasurement>('body', memberId);
+  const select = useCallback(
+    (d: BodyData): BodyData => {
+      if (!pending.length) return d;
+      const local = pending.map((i) => {
+        const out: Record<string, unknown> = { id: i.id, measured_at: i.payload.date, notes: i.payload.notes, is_own: true };
+        for (const m of METRICS) out[m.key] = i.payload.values[m.key] ?? null;
+        return out as Measurement;
+      });
+      return { ...d, rows: [...local, ...d.rows].sort((a, b) => b.measured_at.localeCompare(a.measured_at)) };
+    },
+    [pending]
+  );
   return useQuery({
     queryKey: ['body', memberId],
+    select,
     queryFn: async () => {
       const [progress, member] = await Promise.all([
         supabase
@@ -50,18 +69,28 @@ export function useBody(memberId: string, userId: string) {
   });
 }
 
+export type PendingMeasurement = { values: Partial<Record<MetricKey, number>>; notes: string | null; date: string };
+
+export async function sendMeasurement(memberId: string, userId: string, v: PendingMeasurement): Promise<void> {
+  const { error } = await supabase
+    .from('member_progress')
+    .insert({ member_id: memberId, created_by: userId, measured_at: v.date, notes: v.notes, ...v.values });
+  if (error) throw new Error(error.message);
+}
+
 export function useAddMeasurement(memberId: string, userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (v: { values: Partial<Record<MetricKey, number>>; notes: string | null; date: string }) => {
+    mutationFn: async (v: PendingMeasurement) => {
       if (!Object.values(v.values).some((x) => x != null)) throw new Error('Ingresa al menos un dato (peso o una medida).');
       if (v.date > todayInEcuador()) throw new Error('La fecha no puede ser futura.');
-      const { error } = await supabase
-        .from('member_progress')
-        .insert({ member_id: memberId, created_by: userId, measured_at: v.date, notes: v.notes, ...v.values });
-      if (error) throw new Error(error.message);
+      const r = await sendOrQueue('body', { userId, memberId, payload: v }, (p) => sendMeasurement(memberId, userId, p));
+      return { queued: !!r.queued };
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['body', memberId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['body', memberId] });
+      queryClient.invalidateQueries({ queryKey: ['latest-weight', memberId] });
+    },
   });
 }
 
@@ -69,6 +98,7 @@ export function useDeleteMeasurement(memberId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (isLocalId(id)) return removeItem(id);
       const { error } = await supabase.from('member_progress').delete().eq('id', id);
       if (error) throw new Error(error.message);
     },

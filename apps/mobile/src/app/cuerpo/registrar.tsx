@@ -10,6 +10,7 @@ import { Screen } from '@/components/screen';
 import { Body } from '@/components/text';
 import { METRICS, useAddMeasurement, type MetricKey } from '@/features/body/use-body';
 import { useAuth } from '@/lib/auth';
+import { alertQueued } from '@/lib/offline/outbox';
 import { colors, fonts, radius, space } from '@/theme';
 
 export default function RegisterMeasurementScreen() {
@@ -29,7 +30,15 @@ export default function RegisterMeasurementScreen() {
         if (Number.isFinite(n) && n > 0) parsed[m.key] = n;
       }
     }
-    add.mutate({ values: parsed, notes: notes.trim() || null, date }, { onSuccess: () => router.back() });
+    add.mutate(
+      { values: parsed, notes: notes.trim() || null, date },
+      {
+        onSuccess: (r) => {
+          router.back();
+          if (r.queued) alertQueued();
+        },
+      }
+    );
   }
 
   return (

@@ -16,6 +16,7 @@ import { useLatestWeight, useLogActivity } from '@/features/sports/use-activitie
 import { Locked } from '@/features/training/locked';
 import { useActiveMembership } from '@/features/training/use-active';
 import { useAuth } from '@/lib/auth';
+import { alertQueued } from '@/lib/offline/outbox';
 import { colors, fonts, space } from '@/theme';
 
 const int = (raw: string) => {
@@ -91,7 +92,8 @@ export default function LogActivityScreen() {
       {
         onSuccess: (r) => {
           router.back();
-          if (r.completed.length) {
+          if (r.queued) alertQueued('Si cumple un reto, se marcará al enviarse.');
+          else if (r.completed.length) {
             Alert.alert('¡Reto cumplido! 🏆', r.completed.map((t) => `• ${t}`).join('\n'));
           }
         },

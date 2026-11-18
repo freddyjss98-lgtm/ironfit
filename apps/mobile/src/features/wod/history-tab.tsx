@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { Card } from '@/components/card';
 import { fmtWeekdayLong } from '@/lib/dates';
+import { isLocalId } from '@/lib/offline/outbox';
 import { colors, fonts, space } from '@/theme';
 
 import { fmtScore, SCORE_LABELS } from './score';
@@ -42,6 +43,7 @@ export function WodHistoryTab({ memberId }: { memberId: string }) {
               <Text style={styles.small}>
                 {SCORE_LABELS[r.score_type]} · {r.rx ? 'Rx' : 'Escalado'}
                 {r.notes ? ` · ${r.notes}` : ''}
+                {isLocalId(r.id) ? ' · ⏳ sin enviar' : ''}
               </Text>
             </View>
             <Text style={styles.score}>{fmtScore(r)}</Text>

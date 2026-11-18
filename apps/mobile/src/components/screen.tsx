@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, space } from '@/theme';
 
+import { ConnectionBanner } from './connection-banner';
+
 type Props = {
   children: ReactNode;
   /** Formularios: centra el contenido y evita que el teclado lo tape. */
@@ -12,9 +14,11 @@ type Props = {
   /** Deslizar hacia abajo para recargar. */
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** Franja de "sin conexión" y pendientes de enviar (false en la pantalla Sin conexión). */
+  banner?: boolean;
 };
 
-export function Screen({ children, centered = false, onRefresh, refreshing = false }: Props) {
+export function Screen({ children, centered = false, onRefresh, refreshing = false, banner = true }: Props) {
   // Las pantallas con barra de título ya quedan debajo del notch: sumar el
   // margen superior otra vez dejaba un hueco vacío arriba.
   const hasHeader = useContext(HeaderShownContext);
@@ -31,7 +35,10 @@ export function Screen({ children, centered = false, onRefresh, refreshing = fal
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} colors={[colors.accent]} />
             ) : undefined
           }>
-          <View style={styles.inner}>{children}</View>
+          <View style={styles.inner}>
+            {banner && <ConnectionBanner />}
+            {children}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

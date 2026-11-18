@@ -12,6 +12,7 @@ import { RecordingBanner } from '@/features/gps/recording-banner';
 import { RouteSvg } from '@/features/gps/route-svg';
 import { Locked } from '@/features/training/locked';
 import { ecuadorDateOf, fmtShort } from '@/lib/dates';
+import { isLocalId } from '@/lib/offline/outbox';
 import { colors, fonts, space } from '@/theme';
 
 import { fmtDistance, fmtDuration, fmtPace, sportEmoji, sportLabel } from './sports';
@@ -113,6 +114,7 @@ export function SportsTab({ memberId, active }: { memberId: string; active: bool
               <View style={styles.flex}>
                 <Text style={styles.name}>
                   {sportLabel(a.sport)} · {fmtShort(day(a))}
+                  {isLocalId(a.id) ? ' · ⏳ sin enviar' : ''}
                 </Text>
                 <Text style={styles.small}>
                   {[

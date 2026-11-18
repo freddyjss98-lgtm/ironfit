@@ -8,6 +8,7 @@ import { Button } from '@/components/button';
 import { Card, SectionLabel } from '@/components/card';
 import { Locked } from '@/features/training/locked';
 import { fmtShort } from '@/lib/dates';
+import { isLocalId } from '@/lib/offline/outbox';
 import { colors, fonts, space } from '@/theme';
 
 import { est1RM, muscleLabel, useDeleteRoutine, useDeleteSession, useStrength, type Session } from './use-strength';
@@ -166,7 +167,10 @@ export function StrengthTab({ memberId, active }: { memberId: string; active: bo
                 ])
               }
               style={styles.sessionRow}>
-              <Text style={styles.date}>{fmtShort(s.session_date)}</Text>
+              <Text style={styles.date}>
+                {fmtShort(s.session_date)}
+                {isLocalId(s.id) ? ' ⏳' : ''}
+              </Text>
               <Text style={styles.small} numberOfLines={1}>
                 {[...new Set(s.sets.map((x) => ex(x.exercise_id)?.name ?? ''))].join(' · ')}
               </Text>

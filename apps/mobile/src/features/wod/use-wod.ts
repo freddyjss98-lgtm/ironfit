@@ -1,7 +1,11 @@
 // Resultado del WOD del día y pizarra del box (tabla wod_results + RPC wod_board).
+// Sin internet el resultado queda en la bandeja de salida (uno por día: el
+// último reemplaza al anterior) y se ve como si ya estuviera guardado.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
+import { isLocalId, removeItem, sendOrQueue, usePending, type OutboxItem } from '@/lib/offline/outbox';
 import { supabase } from '@/lib/supabase';
 
 import type { Score, ScoreType } from './score';
@@ -15,9 +19,25 @@ const toScore = <T extends Record<string, unknown>>(r: T) => ({
   load_kg: r.load_kg == null ? null : Number(r.load_kg),
 });
 
+export type PendingWod = { date: string; input: ResultInput };
+
+/** Un resultado pendiente de la bandeja con la forma de uno guardado. */
+function localResult(item: OutboxItem<PendingWod>): MyResult {
+  return { ...item.payload.input, id: item.id, workout_date: item.payload.date };
+}
+
 export function useMyResult(memberId: string, date: string) {
+  const pending = usePending<PendingWod>('wod', memberId);
+  const select = useCallback(
+    (saved: MyResult | null) => {
+      const mine = pending.find((p) => p.payload.date === date);
+      return mine ? localResult(mine) : saved;
+    },
+    [pending, date]
+  );
   return useQuery({
     queryKey: ['wod-result', memberId, date],
+    select,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('wod_results')
@@ -56,15 +76,22 @@ export type ResultInput = {
   parts: PartScore[];
 };
 
-export function useSaveResult(memberId: string, date: string) {
+/** Un resultado por día: si ya existe se corrige. */
+export async function sendWodResult(memberId: string, { date, input }: PendingWod): Promise<void> {
+  const { error } = await supabase
+    .from('wod_results')
+    .upsert({ member_id: memberId, workout_date: date, ...input }, { onConflict: 'member_id,workout_date' });
+  if (error) throw new Error(error.message);
+}
+
+export function useSaveResult(memberId: string, date: string, userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: ResultInput) => {
-      // Un resultado por día: si ya existe se corrige.
-      const { error } = await supabase
-        .from('wod_results')
-        .upsert({ member_id: memberId, workout_date: date, ...input }, { onConflict: 'member_id,workout_date' });
-      if (error) throw new Error(error.message);
+    mutationFn: async (input: ResultInput): Promise<{ queued: boolean }> => {
+      const r = await sendOrQueue('wod', { userId, memberId, payload: { date, input }, dedupeKey: date }, (p) =>
+        sendWodResult(memberId, p)
+      );
+      return { queued: !!r.queued };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wod-result', memberId, date] });
@@ -78,6 +105,7 @@ export function useDeleteResult(memberId: string, date: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (isLocalId(id)) return removeItem(id);
       const { error } = await supabase.from('wod_results').delete().eq('id', id);
       if (error) throw new Error(error.message);
     },
@@ -91,8 +119,20 @@ export function useDeleteResult(memberId: string, date: string) {
 
 /** Mis últimos resultados (historial en Progreso). */
 export function useWodHistory(memberId: string) {
+  const pending = usePending<PendingWod>('wod', memberId);
+  const select = useCallback(
+    (rows: MyResult[]) => {
+      if (!pending.length) return rows;
+      const local = pending.map(localResult);
+      return [...local, ...rows.filter((r) => !local.some((l) => l.workout_date === r.workout_date))].sort((a, b) =>
+        b.workout_date.localeCompare(a.workout_date)
+      );
+    },
+    [pending]
+  );
   return useQuery({
     queryKey: ['wod-history', memberId],
+    select,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('wod_results')

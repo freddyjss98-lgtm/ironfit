@@ -12,6 +12,7 @@ import { ExercisePicker } from '@/features/strength/exercise-picker';
 import { RestTimer } from '@/features/strength/rest-timer';
 import { muscleLabel, useSaveSession, useStrength, type Entry, type Session } from '@/features/strength/use-strength';
 import { useAuth } from '@/lib/auth';
+import { alertQueued } from '@/lib/offline/outbox';
 import { colors, fonts, radius, space } from '@/theme';
 
 /** Series de la última vez que hizo ese ejercicio (para precargar). */
@@ -142,7 +143,17 @@ function SessionForm({
       {save.error && <Notice message={save.error.message} />}
       <Button
         label="Guardar sesión"
-        onPress={() => save.mutate({ date, notes, entries }, { onSuccess: () => router.back() })}
+        onPress={() =>
+            save.mutate(
+              { date, notes, entries },
+              {
+                onSuccess: (r) => {
+                  router.back();
+                  if (r.queued) alertQueued();
+                },
+              }
+            )
+          }
         loading={save.isPending}
         disabled={entries.length === 0}
       />

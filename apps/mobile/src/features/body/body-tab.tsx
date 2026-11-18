@@ -9,6 +9,7 @@ import { Card, SectionLabel } from '@/components/card';
 import { LineChart } from '@/components/line-chart';
 import { Locked } from '@/features/training/locked';
 import { fmtShort } from '@/lib/dates';
+import { isLocalId } from '@/lib/offline/outbox';
 import { colors, fonts, radius, space } from '@/theme';
 
 import { METRICS, useBody, useDeleteMeasurement, useSetGoal, type Measurement, type MetricKey } from './use-body';
@@ -141,7 +142,10 @@ export function BodyTab({ memberId, userId, active }: { memberId: string; userId
         <Card style={styles.list}>
           {rows.map((r, i) => (
             <Pressable key={r.id} onLongPress={() => remove(r)} style={[styles.row, i > 0 && styles.rowBorder]}>
-              <Text style={styles.date}>{fmtShort(r.measured_at)}</Text>
+              <Text style={styles.date}>
+                {fmtShort(r.measured_at)}
+                {isLocalId(r.id) ? ' ⏳' : ''}
+              </Text>
               <Text style={styles.rowText} numberOfLines={1}>
                 {METRICS.filter((m) => r[m.key] != null)
                   .map((m) => `${m.label} ${nice(r[m.key]!)}`)

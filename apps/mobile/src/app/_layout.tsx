@@ -6,7 +6,10 @@ import {
   SpaceGrotesk_600SemiBold,
 } from '@expo-google-fonts/space-grotesk';
 import { SpaceMono_400Regular } from '@expo-google-fonts/space-mono';
-import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { focusManager, MutationCache, QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -18,13 +21,49 @@ import { AppState } from 'react-native';
 // despertar la app mientras se graba una actividad).
 import '@/features/gps/recorder';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { isNetworkError, OFFLINE_MESSAGE, reportOffline, startNetworkWatch } from '@/lib/offline/network';
+import { startOutbox } from '@/lib/offline/outbox';
+// Cómo se envía cada registro pendiente de la bandeja de salida.
+import '@/lib/offline/senders';
 import { colors, fonts } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
+/** Lo cargado se guarda en el teléfono hasta 7 días: sin internet se ve igual. */
+const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: KEEP_MS,
+      // Un fallo de red marca "sin conexión": React Query pausa la consulta
+      // (con sus datos guardados) y la retoma sola cuando vuelve la señal.
+      retry: (count, err) => {
+        if (isNetworkError(err)) {
+          reportOffline();
+          return true;
+        }
+        return count < 1;
+      },
+    },
+    // Las escrituras se intentan siempre: las que pueden esperar se guardan en
+    // la bandeja (outbox.ts) y el resto muestra que necesita internet.
+    mutations: { networkMode: 'always' },
+  },
+  mutationCache: new MutationCache({
+    onError: (err) => {
+      if (!isNetworkError(err)) return;
+      reportOffline();
+      if (err instanceof Error) err.message = OFFLINE_MESSAGE;
+    },
+  }),
 });
+
+const persister = createAsyncStoragePersister({ storage: AsyncStorage, key: 'ironfit:query-cache', throttleTime: 2000 });
+
+startNetworkWatch();
+startOutbox(queryClient);
 
 // Al volver a la app, React Query refresca lo que esté viejo (equivale al
 // "focus" de la ventana en la web).
@@ -42,12 +81,14 @@ export default function RootLayout() {
   });
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister, maxAge: KEEP_MS, buster: 'v1' }}>
       <AuthProvider>
         <StatusBar style="light" />
         <RootNavigator fontsReady={fontsLoaded || !!fontError} />
       </AuthProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
 

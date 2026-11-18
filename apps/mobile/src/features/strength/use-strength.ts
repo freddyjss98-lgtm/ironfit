@@ -3,7 +3,9 @@
 
 import { todayInEcuador } from '@ironfit/shared/date';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
+import { isLocalId, removeItem, sendOrQueue, usePending } from '@/lib/offline/outbox';
 import { supabase } from '@/lib/supabase';
 
 export const MUSCLES = [
@@ -28,9 +30,27 @@ export type Routine = {
   exercises: { exercise_id: string; position: number; target_sets: number | null; target_reps: number | null }[];
 };
 
+type StrengthData = { exercises: Exercise[]; sessions: Session[]; routines: Routine[] };
+
 export function useStrength(memberId: string) {
+  // Las sesiones anotadas sin internet se ven en el historial mientras esperan.
+  const pending = usePending<PendingSession>('strength', memberId);
+  const select = useCallback(
+    (d: StrengthData): StrengthData =>
+      pending.length
+        ? {
+            ...d,
+            sessions: [
+              ...pending.map((i) => ({ id: i.id, session_date: i.payload.date, notes: i.payload.notes, sets: i.payload.sets })),
+              ...d.sessions,
+            ].sort((a, b) => b.session_date.localeCompare(a.session_date)),
+          }
+        : d,
+    [pending]
+  );
   return useQuery({
     queryKey: ['strength', memberId],
+    select,
     queryFn: async () => {
       const [ex, sessions, routines] = await Promise.all([
         supabase
@@ -83,46 +103,61 @@ function useInvalidate(memberId: string) {
   return () => queryClient.invalidateQueries({ queryKey: ['strength', memberId] });
 }
 
+/** Sesión ya validada: lo que se envía (o espera en la bandeja). */
+export type PendingSession = { date: string; notes: string | null; sets: WorkoutSet[] };
+
+/** Valida el formulario y arma las series. Lanza el mensaje para el socio. */
+function buildSession(date: string, notes: string, entries: Entry[]): PendingSession {
+  if (date > todayInEcuador()) throw new Error('La fecha no puede ser futura.');
+  // Series válidas: reps > 0 (el peso puede ser 0 en peso corporal). El mismo
+  // ejercicio repetido se fusiona para no duplicar la numeración.
+  const merged = new Map<string, { weight: number; reps: number }[]>();
+  for (const e of entries) {
+    if (!e.exerciseId) continue;
+    const sets = e.sets
+      .map((s) => ({ weight: Number(s.weight.replace(',', '.')) || 0, reps: Math.round(Number(s.reps) || 0) }))
+      .filter((s) => s.reps > 0);
+    if (!sets.length) continue;
+    merged.set(e.exerciseId, [...(merged.get(e.exerciseId) ?? []), ...sets]);
+  }
+  if (merged.size === 0) throw new Error('Agrega al menos una serie con repeticiones.');
+  return {
+    date,
+    notes: notes.trim() || null,
+    sets: Array.from(merged).flatMap(([exerciseId, sets]) =>
+      sets.map((s, i) => ({
+        exercise_id: exerciseId,
+        set_number: i + 1,
+        weight_kg: Math.max(0, Math.round(s.weight * 100) / 100),
+        reps: s.reps,
+      }))
+    ),
+  };
+}
+
+export async function sendSession(memberId: string, userId: string, p: PendingSession): Promise<void> {
+  const { data: session, error } = await supabase
+    .from('workout_sessions')
+    .insert({ member_id: memberId, session_date: p.date, notes: p.notes, created_by: userId })
+    .select('id')
+    .single();
+  if (error || !session) throw new Error(error?.message ?? 'No se pudo crear la sesión.');
+
+  const { error: setErr } = await supabase.from('workout_sets').insert(p.sets.map((s) => ({ ...s, session_id: session.id })));
+  if (setErr) {
+    // Sin series no debe quedar una sesión vacía.
+    await supabase.from('workout_sessions').delete().eq('id', session.id);
+    throw new Error(setErr.message);
+  }
+}
+
 export function useSaveSession(memberId: string, userId: string) {
   const invalidate = useInvalidate(memberId);
   return useMutation({
     mutationFn: async ({ date, notes, entries }: { date: string; notes: string; entries: Entry[] }) => {
-      if (date > todayInEcuador()) throw new Error('La fecha no puede ser futura.');
-      // Series válidas: reps > 0 (el peso puede ser 0 en peso corporal). El mismo
-      // ejercicio repetido se fusiona para no duplicar la numeración.
-      const merged = new Map<string, { weight: number; reps: number }[]>();
-      for (const e of entries) {
-        if (!e.exerciseId) continue;
-        const sets = e.sets
-          .map((s) => ({ weight: Number(s.weight.replace(',', '.')) || 0, reps: Math.round(Number(s.reps) || 0) }))
-          .filter((s) => s.reps > 0);
-        if (!sets.length) continue;
-        merged.set(e.exerciseId, [...(merged.get(e.exerciseId) ?? []), ...sets]);
-      }
-      if (merged.size === 0) throw new Error('Agrega al menos una serie con repeticiones.');
-
-      const { data: session, error } = await supabase
-        .from('workout_sessions')
-        .insert({ member_id: memberId, session_date: date, notes: notes.trim() || null, created_by: userId })
-        .select('id')
-        .single();
-      if (error || !session) throw new Error(error?.message ?? 'No se pudo crear la sesión.');
-
-      const rows = Array.from(merged).flatMap(([exerciseId, sets]) =>
-        sets.map((s, i) => ({
-          session_id: session.id,
-          exercise_id: exerciseId,
-          set_number: i + 1,
-          weight_kg: Math.max(0, Math.round(s.weight * 100) / 100),
-          reps: s.reps,
-        }))
-      );
-      const { error: setErr } = await supabase.from('workout_sets').insert(rows);
-      if (setErr) {
-        // Sin series no debe quedar una sesión vacía.
-        await supabase.from('workout_sessions').delete().eq('id', session.id);
-        throw new Error(setErr.message);
-      }
+      const payload = buildSession(date, notes, entries);
+      const r = await sendOrQueue('strength', { userId, memberId, payload }, (p) => sendSession(memberId, userId, p));
+      return { queued: !!r.queued };
     },
     onSuccess: invalidate,
   });
@@ -132,6 +167,7 @@ export function useDeleteSession(memberId: string) {
   const invalidate = useInvalidate(memberId);
   return useMutation({
     mutationFn: async (id: string) => {
+      if (isLocalId(id)) return removeItem(id);
       const { error } = await supabase.from('workout_sessions').delete().eq('id', id);
       if (error) throw new Error(error.message);
     },

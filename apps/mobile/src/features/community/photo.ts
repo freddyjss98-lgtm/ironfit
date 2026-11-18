@@ -49,7 +49,22 @@ export function choosePhoto(onPicked: (p: PickedPhoto) => void) {
 }
 
 export async function uploadCommunityPhoto(userId: string, photo: PickedPhoto): Promise<string> {
-  const body = await (await fetch(photo.uri)).arrayBuffer();
+  return uploadCommunityPhotoData(userId, await (await fetch(photo.uri)).arrayBuffer());
+}
+
+/**
+ * Lee la foto ya reducida del teléfono. null si el archivo ya no existe: las
+ * fotos de un registro pendiente viven en la caché y el sistema puede borrarla.
+ */
+export async function readLocalPhoto(photo: PickedPhoto): Promise<ArrayBuffer | null> {
+  try {
+    return await (await fetch(photo.uri)).arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
+export async function uploadCommunityPhotoData(userId: string, body: ArrayBuffer): Promise<string> {
   const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const { error } = await supabase.storage.from(COMMUNITY_BUCKET).upload(path, body, { contentType: 'image/jpeg' });
   if (error) throw new Error(`No se pudo subir la foto: ${error.message}`);

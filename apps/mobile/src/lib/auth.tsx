@@ -2,12 +2,28 @@
 // ficha en `members` (staff que no entrena) ve un aviso de que su panel está
 // en la web.
 
-import type { Session } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isAuthRetryableFetchError, type Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { SUPABASE_URL } from './config';
+import { checkConnection } from './offline/network';
+import { clearOutbox } from './offline/outbox';
 import { unregisterPush } from './push';
 import { supabase } from './supabase';
+
+/** La sesión tal como supabase-js la guarda en el teléfono (clave sb-<ref>-auth-token). */
+async function storedSession(): Promise<Session | null> {
+  try {
+    const ref = new URL(SUPABASE_URL).hostname.split('.')[0];
+    const raw = await AsyncStorage.getItem(`sb-${ref}-auth-token`);
+    const s = raw ? (JSON.parse(raw) as Session) : null;
+    return s?.refresh_token && s.user?.id ? s : null;
+  } catch {
+    return null;
+  }
+}
 
 export type Member = { id: string; full_name: string; birthday: string | null; photo_url: string | null };
 
@@ -36,11 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [restored, setRestored] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    supabase.auth.getSession().then(async ({ data, error }) => {
+      // El token dura una hora: si venció y no hay internet para renovarlo,
+      // getSession no devuelve sesión aunque siga guardada. Se usa la guardada
+      // para entrar con los datos del teléfono; al volver la señal, Supabase la
+      // renueva solo y avisa con TOKEN_REFRESHED.
+      const offline = !data.session && error && isAuthRetryableFetchError(error);
+      setSession(data.session ?? (offline ? await storedSession() : null));
       setRestored(true);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      // Sin red, el INITIAL_SESSION llega vacío: no debe borrar la guardada.
+      if (!next && event !== 'SIGNED_OUT') return;
+      setSession(next);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -67,7 +92,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : session.user.user_metadata?.must_change_password === true
         ? 'mustChangePassword'
         : memberQuery.isPending
-          ? 'loading'
+          ? // Sin internet y sin nada guardado en el teléfono, la consulta
+            // queda en pausa: se muestra "Sin conexión" en vez del splash.
+            memberQuery.fetchStatus === 'paused'
+            ? 'offline'
+            : 'loading'
           : memberQuery.isError
             ? 'offline'
             : memberQuery.data
@@ -76,16 +105,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(
     async (opts?: { accountDeleted?: boolean }) => {
+      const userId = session?.user.id;
       if (opts?.accountDeleted) {
         // El usuario ya no existe en el servidor: solo se limpia el teléfono.
         await supabase.auth.signOut({ scope: 'local' });
       } else {
         await unregisterPush(); // antes del signOut: la API necesita la sesión
-        await supabase.auth.signOut();
+        // Sin internet el cierre en el servidor falla y la sesión seguiría
+        // guardada: se cierra al menos en el teléfono.
+        const { error } = await supabase.auth.signOut();
+        if (error) await supabase.auth.signOut({ scope: 'local' });
       }
+      if (userId) await clearOutbox(userId);
       queryClient.clear();
+      // Si se cerró sin red no llega SIGNED_OUT de inmediato.
+      setSession(null);
     },
-    [queryClient]
+    [queryClient, session]
   );
 
   const value = useMemo<AuthContextValue>(
@@ -93,7 +129,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       session,
       member: memberQuery.data ?? null,
-      retry: () => void memberQuery.refetch(),
+      retry: () => {
+        checkConnection();
+        void memberQuery.refetch();
+      },
       signOut,
     }),
     [status, session, memberQuery, signOut]

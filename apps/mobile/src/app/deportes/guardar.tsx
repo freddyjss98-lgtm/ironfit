@@ -16,6 +16,7 @@ import { useRecording } from '@/features/gps/use-recording';
 import { estimateCalories, fmtClock, fmtDistance, fmtPace, sportEmoji, sportLabel } from '@/features/sports/sports';
 import { useLatestWeight, useLogActivity } from '@/features/sports/use-activities';
 import { useAuth } from '@/lib/auth';
+import { alertQueued } from '@/lib/offline/outbox';
 import { colors, fonts, radius, space } from '@/theme';
 
 // Resumen de lo grabado con el GPS: comentario, compartir y guardar. Al
@@ -73,8 +74,10 @@ export default function SaveRecordingScreen() {
       {
         onSuccess: async (r) => {
           await clearRecording();
+          // Sin señal queda en la bandeja, pero igual se puede compartir la tarjeta.
           router.replace({ pathname: '/deportes/compartir', params: { id: r.activity_id } });
-          if (r.completed.length) Alert.alert('¡Reto cumplido! 🏆', r.completed.map((t) => `• ${t}`).join('\n'));
+          if (r.queued) alertQueued('Si cumple un reto, se marcará al enviarse.');
+          else if (r.completed.length) Alert.alert('¡Reto cumplido! 🏆', r.completed.map((t) => `• ${t}`).join('\n'));
         },
       }
     );
