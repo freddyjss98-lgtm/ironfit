@@ -58,9 +58,18 @@ export function SportsTab({ memberId, active }: { memberId: string; active: bool
   const activities = useActivities(memberId);
   const del = useDeleteActivity(memberId);
 
-  if (activities.isPending) return <ActivityIndicator color={colors.accent} />;
-  if (activities.isError) return <Text style={styles.dim}>No se pudieron cargar tus actividades.</Text>;
-  const rows = activities.data;
+  // Grabar y registrar no dependen de la lista: sin internet y sin nada
+  // guardado, los botones siguen ahí (es justo cuando más se usan).
+  const rows = activities.data ?? [];
+  const listState = activities.isError ? (
+    <Text style={styles.dim}>No se pudieron cargar tus actividades.</Text>
+  ) : activities.isPending ? (
+    activities.fetchStatus === 'paused' ? (
+      <Text style={styles.dim}>Tu historial se verá cuando tengas conexión. Puedes grabar o registrar igual.</Text>
+    ) : (
+      <ActivityIndicator color={colors.accent} />
+    )
+  ) : null;
 
   // Semana de lunes a domingo y mes calendario, en hora de Ecuador.
   const today = todayInEcuador();
@@ -88,50 +97,54 @@ export function SportsTab({ memberId, active }: { memberId: string; active: bool
         <Locked what="Registrar actividades" />
       )}
 
-      <Totals label="Esta semana" rows={rows.filter((a) => day(a) >= weekStart)} />
-      <Totals label="Este mes" rows={rows.filter((a) => day(a) >= monthStart)} />
+      {listState ?? (
+        <>
+          <Totals label="Esta semana" rows={rows.filter((a) => day(a) >= weekStart)} />
+          <Totals label="Este mes" rows={rows.filter((a) => day(a) >= monthStart)} />
 
-      {rows.length === 0 ? (
-        <Text style={styles.dim}>
-          Corre, pedalea, nada o sube una montaña y regístralo aquí: suma para los retos del gimnasio.
-        </Text>
-      ) : (
-        <Card style={styles.list}>
-          {rows.map((a, i) => (
-            <Pressable
-              key={a.id}
-              onPress={() => router.push({ pathname: '/deportes/compartir', params: { id: a.id } })}
-              onLongPress={() => remove(a)}
-              accessibilityHint="Toca para compartir; mantén presionado para borrar"
-              style={({ pressed }) => [styles.row, i > 0 && styles.rowBorder, pressed && { opacity: 0.7 }]}>
-              {a.route_polyline ? (
-                <View style={styles.thumb}>
-                  <RouteSvg points={decodePolyline(a.route_polyline)} width={40} height={40} strokeWidth={2} />
-                </View>
-              ) : (
-                <Text style={styles.emoji}>{sportEmoji(a.sport)}</Text>
-              )}
-              <View style={styles.flex}>
-                <Text style={styles.name}>
-                  {sportLabel(a.sport)} · {fmtShort(day(a))}
-                  {isLocalId(a.id) ? ' · ⏳ sin enviar' : ''}
-                </Text>
-                <Text style={styles.small}>
-                  {[
-                    fmtDuration(a.duration_seconds),
-                    fmtPace(a.sport, a.duration_seconds, a.distance_m),
-                    a.calories ? `${a.calories} kcal${a.calories_estimated ? ' (est.)' : ''}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
-              </View>
-              <Text style={styles.dist}>{fmtDistance(a.distance_m, a.sport) ?? ''}</Text>
-            </Pressable>
-          ))}
-        </Card>
+          {rows.length === 0 ? (
+            <Text style={styles.dim}>
+              Corre, pedalea, nada o sube una montaña y regístralo aquí: suma para los retos del gimnasio.
+            </Text>
+          ) : (
+            <Card style={styles.list}>
+              {rows.map((a, i) => (
+                <Pressable
+                  key={a.id}
+                  onPress={() => router.push({ pathname: '/deportes/compartir', params: { id: a.id } })}
+                  onLongPress={() => remove(a)}
+                  accessibilityHint="Toca para compartir; mantén presionado para borrar"
+                  style={({ pressed }) => [styles.row, i > 0 && styles.rowBorder, pressed && { opacity: 0.7 }]}>
+                  {a.route_polyline ? (
+                    <View style={styles.thumb}>
+                      <RouteSvg points={decodePolyline(a.route_polyline)} width={40} height={40} strokeWidth={2} />
+                    </View>
+                  ) : (
+                    <Text style={styles.emoji}>{sportEmoji(a.sport)}</Text>
+                  )}
+                  <View style={styles.flex}>
+                    <Text style={styles.name}>
+                      {sportLabel(a.sport)} · {fmtShort(day(a))}
+                      {isLocalId(a.id) ? ' · ⏳ sin enviar' : ''}
+                    </Text>
+                    <Text style={styles.small}>
+                      {[
+                        fmtDuration(a.duration_seconds),
+                        fmtPace(a.sport, a.duration_seconds, a.distance_m),
+                        a.calories ? `${a.calories} kcal${a.calories_estimated ? ' (est.)' : ''}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  </View>
+                  <Text style={styles.dist}>{fmtDistance(a.distance_m, a.sport) ?? ''}</Text>
+                </Pressable>
+              ))}
+            </Card>
+          )}
+          {rows.length > 0 && <Text style={styles.hint}>Toca una actividad para compartirla; mantenla presionada para borrarla.</Text>}
+        </>
       )}
-      {rows.length > 0 && <Text style={styles.hint}>Toca una actividad para compartirla; mantenla presionada para borrarla.</Text>}
     </>
   );
 }
