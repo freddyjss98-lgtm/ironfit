@@ -12,7 +12,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
+import { Platform } from 'react-native';
 
 import type { Sport } from '@/features/sports/sports';
 
@@ -168,6 +170,22 @@ export async function ensureLocationReady(): Promise<void> {
   const perm = await Location.requestForegroundPermissionsAsync();
   if (!perm.granted) {
     throw new Error('Iron Fit necesita tu ubicación para medir la distancia. Actívala en los ajustes del teléfono.');
+  }
+  await askNotificationPermission();
+}
+
+/**
+ * Desde Android 13 la notificación "Iron Fit está grabando tu actividad" del
+ * servicio en primer plano solo se ve con el permiso de notificaciones. Se
+ * pide aquí, al tocar Empezar; si lo niega, se graba igual, sin la notificación.
+ */
+async function askNotificationPermission(): Promise<void> {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 33) return;
+  try {
+    const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted' && canAskAgain) await Notifications.requestPermissionsAsync();
+  } catch {
+    // Sin el permiso la grabación funciona igual.
   }
 }
 
