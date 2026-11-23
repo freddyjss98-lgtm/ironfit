@@ -18,6 +18,8 @@ import {
 } from '@/features/home/sections';
 import { CheckInCard } from '@/features/home/check-in';
 import { useHome } from '@/features/home/use-home';
+import { OnlineCard } from '@/features/online/online-card';
+import { useAppAccess } from '@/features/training/use-active';
 import { useAuth } from '@/lib/auth';
 import { greeting, isBirthdayToday } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/theme';
@@ -26,7 +28,11 @@ export default function HomeScreen() {
   const router = useRouter();
   const { member } = useAuth();
   const home = useHome(member!.id);
+  const access = useAppAccess(member!.id);
   const firstName = member!.full_name.trim().split(/\s+/)[0];
+  // Usuario solo de la app: su "membresía" es Iron Fit Online, no la del box.
+  const appUser = member!.kind === 'app';
+  const showOnline = appUser || !!access.data?.subscription;
 
   const activate = () => router.push('/renovar');
   const m = home.data?.membership;
@@ -73,17 +79,18 @@ export default function HomeScreen() {
             />
           )}
           <WeeklyGoalCard stats={home.data.stats} />
-          <MembershipCard membership={home.data.membership} onActivate={activate} />
+          {!appUser && <MembershipCard membership={home.data.membership} onActivate={activate} />}
+          {showOnline && access.data && <OnlineCard access={access.data} />}
           <StatTiles stats={home.data.stats} />
           <Achievements stats={home.data.stats} />
           <ActivityHeatmap stats={home.data.stats} />
 
           <Text style={styles.sectionTitle}>Accesos rápidos</Text>
           <View style={styles.quickGrid}>
-            {needsRenewal && <QuickAction icon="refresh" label="Renovar" onPress={activate} highlight />}
+            {needsRenewal && !appUser && <QuickAction icon="refresh" label="Renovar" onPress={activate} highlight />}
             <QuickAction icon="barbell-outline" label="Entrenamiento" onPress={() => router.navigate('/clases')} />
             <QuickAction icon="stats-chart-outline" label="Progreso" onPress={() => router.navigate('/progreso')} />
-            <QuickAction icon="receipt-outline" label="Pagos y renovación" onPress={activate} />
+            {!appUser && <QuickAction icon="receipt-outline" label="Pagos y renovación" onPress={activate} />}
             <QuickAction icon="bag-handle-outline" label="Tienda" onPress={() => router.push('/tienda')} />
           </View>
 

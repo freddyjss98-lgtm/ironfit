@@ -32,7 +32,7 @@ export default function CommunityScreen() {
   async function refresh() {
     setRefreshing(true);
     await queryClient.invalidateQueries({
-      predicate: (q) => ['active', 'community-terms', 'challenges', 'feed'].includes(String(q.queryKey[0])),
+      predicate: (q) => ['app-access', 'community-terms', 'challenges', 'feed'].includes(String(q.queryKey[0])),
     });
     setRefreshing(false);
   }

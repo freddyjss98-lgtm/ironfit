@@ -12,8 +12,13 @@ export default async function MiembrosPage() {
     : { data: null };
   const role: "admin" | "coach" = me?.role === "coach" ? "coach" : "admin";
 
-  const [{ data: members, error: membersError }, { data: plans }, { data: archived }, { data: profiles }] =
-    await Promise.all([
+  const [
+    { data: allMembers, error: membersError },
+    { data: plans },
+    { data: archived },
+    { data: profiles },
+    { data: appOnly },
+  ] = await Promise.all([
       supabase
         .from("vw_members_with_active_membership")
         .select(
@@ -36,7 +41,14 @@ export default async function MiembrosPage() {
       supabase
         .from("profiles")
         .select("id, role"),
+
+      // Registrados solo para la app (membresía digital): no son socios del
+      // gimnasio hasta que compran aquí (su primera membresía los pasa a 'gym').
+      supabase.from("members").select("id").eq("kind", "app").is("deleted_at", null),
     ]);
+
+  const appOnlyIds = new Set((appOnly ?? []).map((m) => m.id as string));
+  const members = (allMembers ?? []).filter((m) => !appOnlyIds.has(m.id as string));
 
   if (membersError) {
     console.error("[MiembrosPage] Query error:", membersError);
@@ -57,7 +69,10 @@ export default async function MiembrosPage() {
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-2xl uppercase tracking-tight">Miembros</h2>
-        <p className="text-fg/40 text-sm mt-0.5">{members?.length ?? 0} registrados</p>
+        <p className="text-fg/40 text-sm mt-0.5">
+          {members.length} registrados
+          {appOnlyIds.size > 0 && ` · ${appOnlyIds.size} solo en la app`}
+        </p>
       </div>
 
       <MembersClient

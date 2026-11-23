@@ -24,7 +24,7 @@ export default function ProgressScreen() {
   async function refresh() {
     setRefreshing(true);
     await queryClient.invalidateQueries({
-      predicate: (q) => ['lifts', 'wod-history', 'body', 'strength', 'active'].includes(String(q.queryKey[0])),
+      predicate: (q) => ['lifts', 'wod-history', 'body', 'strength', 'app-access'].includes(String(q.queryKey[0])),
     });
     setRefreshing(false);
   }

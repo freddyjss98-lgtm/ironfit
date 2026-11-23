@@ -25,7 +25,14 @@ async function storedSession(): Promise<Session | null> {
   }
 }
 
-export type Member = { id: string; full_name: string; birthday: string | null; photo_url: string | null };
+export type Member = {
+  id: string;
+  full_name: string;
+  birthday: string | null;
+  photo_url: string | null;
+  /** gym = socio del gimnasio; app = se registró desde la app (membresía digital). */
+  kind: 'gym' | 'app';
+};
 
 export type AuthStatus =
   | 'loading'
@@ -76,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: async (): Promise<Member | null> => {
       const { data, error } = await supabase
         .from('members')
-        .select('id, full_name, birthday, photo_url')
+        .select('id, full_name, birthday, photo_url, kind')
         .eq('user_id', userId!)
         .is('deleted_at', null)
         .maybeSingle();

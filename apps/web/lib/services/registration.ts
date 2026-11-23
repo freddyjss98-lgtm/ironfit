@@ -64,3 +64,48 @@ export async function registerMember(
 
   return { session: data.session };
 }
+
+export type AppSignupInput = { fullName: string; email: string; password: string };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Registro desde la app (v1.1): cualquiera puede crear su cuenta para usar la
+ * app con la membresía digital. Solo pide lo necesario (nombre, correo y
+ * contraseña; las tiendas piden no exigir datos que la función no usa). El
+ * trigger `handle_new_user` crea la ficha como `kind = 'app'`, ya revisada:
+ * no es un socio nuevo que recepción deba atender, así que no se avisa al
+ * staff. Si después compra en el gimnasio, su primera membresía la pasa a 'gym'.
+ */
+export async function registerAppUser(
+  supabase: SupabaseClient,
+  raw: AppSignupInput
+): Promise<{ session: Session | null }> {
+  const fullName = raw.fullName?.trim().replace(/\s+/g, " ");
+  const email = raw.email?.trim().toLowerCase();
+  const password = raw.password;
+
+  if (!fullName || !email || !password) throw new Error("Completa tu nombre, correo y contraseña");
+  if (fullName.length > 80) throw new Error("El nombre es demasiado largo");
+  if (!EMAIL_RE.test(email)) throw new Error("El correo no es válido");
+  if (password.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres");
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: fullName, is_app_signup: true } },
+  });
+  if (error) {
+    if (/already registered|already been registered/i.test(error.message)) {
+      throw new Error("Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.");
+    }
+    throw new Error(error.message);
+  }
+  // Con la confirmación de correo activa, Supabase no avisa si el correo ya
+  // existía: devuelve un usuario sin identidades.
+  if (data.user && data.user.identities?.length === 0) {
+    throw new Error("Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.");
+  }
+
+  return { session: data.session };
+}

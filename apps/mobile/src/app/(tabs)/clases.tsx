@@ -10,6 +10,7 @@ import { Body, Title } from '@/components/text';
 import { ClassCard, DAY_FULL, DAY_SHORT, DateStrip, DayWod, dayNum, fmt12h } from '@/features/classes/parts';
 import { dowOf, useClasses, type MyBooking } from '@/features/classes/use-classes';
 import { Locked } from '@/features/training/locked';
+import { useActiveMembership } from '@/features/training/use-active';
 import { Board, MyResultCard } from '@/features/wod/parts';
 import { addDays } from '@ironfit/shared/date';
 import { useAuth } from '@/lib/auth';
@@ -21,6 +22,10 @@ export default function ClassesScreen() {
   const memberId = member!.id;
   const router = useRouter();
   const classes = useClasses(memberId);
+  // El WOD, mi registro y la pizarra: gimnasio o Iron Fit Online. Reservar
+  // clases es solo del gimnasio (data.hasActiveMembership).
+  const appAccess = useActiveMembership(memberId).data !== false;
+  const appUser = member!.kind === 'app';
   const [selected, setSelected] = useState<string | null>(null);
 
   if (classes.isPending || classes.isError) {
@@ -64,15 +69,27 @@ export default function ClassesScreen() {
         </Body>
       </View>
 
-      {!data.hasActiveMembership && (
-        <View style={styles.warn}>
-          <Text style={styles.warnTitle}>⚠️ Tu membresía no está activa</Text>
-          <Text style={styles.warnText}>Necesitas una membresía vigente para reservar clases.</Text>
-          <View style={styles.warnAction}>
-            <Button label="Renovar membresía" onPress={() => router.push('/renovar')} />
+      {!data.hasActiveMembership &&
+        (appUser ? (
+          <View style={styles.info}>
+            <Text style={styles.infoTitle}>Clases presenciales en el box</Text>
+            <Text style={styles.warnText}>
+              Para reservar clases necesitas una membresía del gimnasio. Con Iron Fit Online ves el WOD de cada día y
+              registras tu resultado.
+            </Text>
+            <View style={styles.warnAction}>
+              <Button label="Ver planes del gimnasio" variant="secondary" onPress={() => router.push('/renovar')} />
+            </View>
           </View>
-        </View>
-      )}
+        ) : (
+          <View style={styles.warn}>
+            <Text style={styles.warnTitle}>⚠️ Tu membresía no está activa</Text>
+            <Text style={styles.warnText}>Necesitas una membresía vigente para reservar clases.</Text>
+            <View style={styles.warnAction}>
+              <Button label="Renovar membresía" onPress={() => router.push('/renovar')} />
+            </View>
+          </View>
+        ))}
 
       <DateStrip
         dates={data.dates}
@@ -92,7 +109,7 @@ export default function ClassesScreen() {
       </View>
 
       {!closedReason &&
-        (data.hasActiveMembership ? (
+        (appAccess ? (
           <>
             <DayWod html={data.wodByDate[date]} />
             {date <= data.today && date >= addDays(data.today, -7) && (
@@ -167,6 +184,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: space.lg,
   },
+  info: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.lg,
+    padding: space.lg,
+  },
+  infoTitle: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.fg },
   warnTitle: { fontFamily: fonts.bodySemi, fontSize: 14, color: '#fcd34d' },
   warnText: { fontFamily: fonts.body, fontSize: 13, color: colors.fgDim, marginTop: 2 },
   warnAction: { marginTop: space.md },

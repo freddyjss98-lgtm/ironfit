@@ -181,10 +181,13 @@ const welcomeProcessor: ReminderProcessor = {
   label: "Bienvenidas",
   async fetchCandidates(supabase) {
     const since = new Date(Date.now() - 2 * 86400000).toISOString();
+    // Solo socios del gimnasio: quien se registró desde la app para la
+    // membresía digital no recibe la invitación a comprar en el gimnasio.
     const { data: news } = await supabase
       .from("members")
       .select("id, full_name, phone, created_at")
       .eq("status", "active")
+      .eq("kind", "gym")
       .is("deleted_at", null)
       .gte("created_at", since);
 
@@ -324,9 +327,17 @@ const birthdayProcessor: ReminderProcessor = {
       .from("vw_birthdays_today")
       .select("member_id, full_name, phone");
 
+    // Los usuarios solo de la app (membresía digital) no son socios del
+    // gimnasio: el saludo por WhatsApp es para los socios.
+    const ids = (data ?? []).map((r) => r.member_id);
+    const { data: appOnly } = ids.length
+      ? await supabase.from("members").select("id").in("id", ids).eq("kind", "app")
+      : { data: [] as { id: string }[] };
+    const skip = new Set((appOnly ?? []).map((m) => m.id));
+
     const ref = todayEc(); // cambia cada año → una felicitación por año
     return (data ?? [])
-      .filter((r) => r.phone)
+      .filter((r) => r.phone && !skip.has(r.member_id))
       .map((r) => {
         const fn = firstName(r.full_name);
         return {

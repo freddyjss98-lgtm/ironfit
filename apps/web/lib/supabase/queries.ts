@@ -59,9 +59,11 @@ export async function getDashboardStats(client?: SupabaseClient) {
       .select("id", { count: "exact", head: true })
       .eq("checked_in_date", today),
 
+    // Socios nuevos del gimnasio (sin los registrados solo para la app).
     supabase
       .from("members")
       .select("id", { count: "exact", head: true })
+      .eq("kind", "gym")
       .gte("created_at", startOfMonth),
 
     supabase

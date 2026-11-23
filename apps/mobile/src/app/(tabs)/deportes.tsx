@@ -18,7 +18,7 @@ export default function SportsScreen() {
   async function refresh() {
     setRefreshing(true);
     await queryClient.invalidateQueries({
-      predicate: (q) => ['activities', 'active'].includes(String(q.queryKey[0])),
+      predicate: (q) => ['activities', 'app-access'].includes(String(q.queryKey[0])),
     });
     setRefreshing(false);
   }
